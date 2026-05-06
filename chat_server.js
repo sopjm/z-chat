@@ -1,6 +1,6 @@
 const http = require("http");
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const MAX_USERS_PER_ROOM = 6;
 
 let rooms = {};
@@ -251,8 +251,8 @@ body {
 
   <div id="mainPage" class="page">
     <div class="card">
-      <h2>채팅방</h2>
-      <p>방을 만들거나 초대코드로 들어가세요</p>
+      <h2>관리자 화면</h2>
+      <p>방을 만들거나 기존 방에 들어가세요</p>
       <button onclick="showCreateRoom()">방 만들기</button>
       <button class="sub-btn" onclick="showJoinRoom()">방 들어가기</button>
     </div>
@@ -264,7 +264,7 @@ body {
   <div id="createPage" class="page" style="display:none;">
     <div class="card">
       <h2>방 만들기</h2>
-      <input id="createCode" placeholder="예: 7777">
+      <input id="createCode" placeholder="예: z9x7qk21p">
       <button onclick="createRoom()">방 만들기</button>
       <button class="sub-btn" onclick="goMain()">뒤로가기</button>
     </div>
@@ -273,9 +273,10 @@ body {
   <div id="joinPage" class="page" style="display:none;">
     <div class="card">
       <h2>방 들어가기</h2>
+      <p id="joinGuide">방 코드를 입력하세요</p>
       <input id="joinCode" placeholder="초대코드 입력">
       <button onclick="joinRoom()">입장하기</button>
-      <button class="sub-btn" onclick="goMain()">뒤로가기</button>
+      <button id="joinBackBtn" class="sub-btn" onclick="goMain()">뒤로가기</button>
     </div>
   </div>
 
@@ -292,6 +293,8 @@ body {
 </div>
 
 <script>
+const IS_ADMIN = "__IS_ADMIN__";
+
 let userId = localStorage.getItem("z_userId");
 let roomCode = "";
 let enterTimer = null;
@@ -304,7 +307,12 @@ if (!userId) {
 
 setTimeout(() => {
   document.getElementById("loading").style.display = "none";
-  goMain();
+
+  if (IS_ADMIN === "true") {
+    goMain();
+  } else {
+    showJoinRoomForGuest();
+  }
 }, 1300);
 
 function getSavedRooms() {
@@ -363,6 +371,14 @@ function showCreateRoom() {
 function showJoinRoom() {
   hideAllPages();
   document.getElementById("joinPage").style.display = "block";
+  document.getElementById("joinBackBtn").style.display = "block";
+}
+
+function showJoinRoomForGuest() {
+  hideAllPages();
+  document.getElementById("joinPage").style.display = "block";
+  document.getElementById("joinBackBtn").style.display = "none";
+  document.getElementById("joinGuide").innerText = "친구에게 받은 방 코드를 입력하세요";
 }
 
 async function createRoom() {
@@ -426,7 +442,11 @@ async function leaveRoom() {
     body: JSON.stringify({ userId, roomCode })
   });
 
-  goMain();
+  if (IS_ADMIN === "true") {
+    goMain();
+  } else {
+    showJoinRoomForGuest();
+  }
 }
 
 function stopTimers() {
@@ -518,10 +538,18 @@ function getRoom(code) {
   return rooms[code];
 }
 
+function sendHtml(res, isAdmin) {
+  res.writeHead(200, {"Content-Type":"text/html; charset=utf-8"});
+  res.end(html.replace("__IS_ADMIN__", isAdmin ? "true" : "false"));
+}
+
 const server = http.createServer((req, res) => {
   if (req.url === "/") {
-    res.writeHead(200, {"Content-Type":"text/html; charset=utf-8"});
-    res.end(html);
+    sendHtml(res, false);
+  }
+
+  else if (req.url === "/admin") {
+    sendHtml(res, true);
   }
 
   else if (req.url === "/create-room" && req.method === "POST") {
@@ -631,5 +659,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log("Z Chat 서버 실행됨!");
-  console.log("내 PC 접속: http://localhost:" + PORT);
+  console.log("PORT:", PORT);
 });
