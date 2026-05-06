@@ -1,0 +1,8 @@
+{
+  "name": "z-chat",
+  "version": "1.0.0",
+  "main": "chat_server.js",
+  "scripts": {
+    "start": "node chat_server.js"
+  }
+}
