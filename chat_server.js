@@ -2,6 +2,7 @@ const http = require("http");
 
 const PORT = process.env.PORT || 3000;
 const MAX_USERS_PER_ROOM = 6;
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
 
 let rooms = {};
 
@@ -11,6 +12,10 @@ const html = `
 <head>
 <meta charset="UTF-8">
 <title>Z Chat</title>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111111">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <meta property="og:title" content="Z Chat">
 <meta property="og:description" content="초대코드로 들어오는 6인 채팅방">
@@ -148,10 +153,6 @@ body {
   border: 1px solid #444;
 }
 
-.room-item:hover {
-  background: #333;
-}
-
 .room-name {
   font-size: 17px;
   font-weight: bold;
@@ -185,23 +186,50 @@ body {
   background: #2b2b2b;
 }
 
+.msg-wrap {
+  display: flex;
+  margin: 8px 0;
+}
+
+.msg-wrap.mine {
+  justify-content: flex-end;
+}
+
+.msg-wrap.other {
+  justify-content: flex-start;
+}
+
 .msg {
-  background: #444;
-  color: white;
-  width: fit-content;
   max-width: 75%;
   padding: 10px 13px;
   border-radius: 16px;
-  margin: 8px 0;
   line-height: 1.4;
   word-break: break-word;
 }
 
+.msg.mine {
+  background: #f7e600;
+  color: #111;
+  border-bottom-right-radius: 4px;
+}
+
+.msg.other {
+  background: #444;
+  color: white;
+  border-bottom-left-radius: 4px;
+}
+
 .name {
   font-size: 12px;
-  color: #ddd;
   margin-bottom: 4px;
   font-weight: bold;
+  opacity: 0.75;
+}
+
+.chat-img, .chat-video {
+  max-width: 100%;
+  border-radius: 12px;
+  margin-top: 5px;
 }
 
 .input-area {
@@ -212,7 +240,7 @@ body {
   border-top: 1px solid #444;
 }
 
-.input-area input {
+.input-area input[type="text"] {
   border: none;
   padding: 12px;
   border-radius: 12px;
@@ -220,10 +248,8 @@ body {
   color: white;
   font-size: 15px;
   outline: none;
+  flex: 1;
 }
-
-#name { width: 85px; }
-#text { flex: 1; }
 
 .input-area button {
   border: none;
@@ -232,6 +258,11 @@ body {
   background: white;
   color: black;
   font-weight: bold;
+}
+
+.file-btn {
+  background: #555 !important;
+  color: white !important;
 }
 </style>
 </head>
@@ -264,7 +295,8 @@ body {
   <div id="createPage" class="page" style="display:none;">
     <div class="card">
       <h2>방 만들기</h2>
-      <input id="createCode" placeholder="예: z9x7qk21p">
+      <input id="createCode" placeholder="방 코드 예: z9x7qk21p">
+      <input id="createName" placeholder="내 이름">
       <button onclick="createRoom()">방 만들기</button>
       <button class="sub-btn" onclick="goMain()">뒤로가기</button>
     </div>
@@ -273,8 +305,9 @@ body {
   <div id="joinPage" class="page" style="display:none;">
     <div class="card">
       <h2>방 들어가기</h2>
-      <p id="joinGuide">방 코드를 입력하세요</p>
+      <p id="joinGuide">친구에게 받은 방 코드를 입력하세요</p>
       <input id="joinCode" placeholder="초대코드 입력">
+      <input id="joinName" placeholder="내 이름">
       <button onclick="joinRoom()">입장하기</button>
       <button id="joinBackBtn" class="sub-btn" onclick="goMain()">뒤로가기</button>
     </div>
@@ -285,9 +318,10 @@ body {
     <div id="messages"></div>
 
     <div class="input-area">
-      <input id="name" placeholder="닉네임">
-      <input id="text" placeholder="메시지 입력">
-      <button onclick="send()">전송</button>
+      <button class="file-btn" onclick="document.getElementById('fileInput').click()">＋</button>
+      <input id="fileInput" type="file" accept="image/*,video/*" style="display:none" onchange="sendFile()">
+      <input id="text" type="text" placeholder="메시지 입력">
+      <button onclick="sendText()">전송</button>
     </div>
   </div>
 </div>
@@ -296,6 +330,7 @@ body {
 const IS_ADMIN = "__IS_ADMIN__";
 
 let userId = localStorage.getItem("z_userId");
+let userName = localStorage.getItem("z_userName") || "";
 let roomCode = "";
 let enterTimer = null;
 let messageTimer = null;
@@ -307,6 +342,9 @@ if (!userId) {
 
 setTimeout(() => {
   document.getElementById("loading").style.display = "none";
+
+  document.getElementById("joinName").value = userName;
+  document.getElementById("createName").value = userName;
 
   if (IS_ADMIN === "true") {
     goMain();
@@ -378,14 +416,23 @@ function showJoinRoomForGuest() {
   hideAllPages();
   document.getElementById("joinPage").style.display = "block";
   document.getElementById("joinBackBtn").style.display = "none";
-  document.getElementById("joinGuide").innerText = "친구에게 받은 방 코드를 입력하세요";
+  document.getElementById("joinGuide").innerText = "방 코드와 이름을 입력하세요";
+}
+
+function saveName(name) {
+  userName = name;
+  localStorage.setItem("z_userName", userName);
 }
 
 async function createRoom() {
-  const input = document.getElementById("createCode").value.trim();
-  if (!input) return alert("방 코드를 입력해줘");
+  const code = document.getElementById("createCode").value.trim();
+  const name = document.getElementById("createName").value.trim();
 
-  roomCode = input;
+  if (!code) return alert("방 코드를 입력해줘");
+  if (!name) return alert("이름을 입력해줘");
+
+  saveName(name);
+  roomCode = code;
 
   const res = await fetch("/create-room", {
     method: "POST",
@@ -401,10 +448,13 @@ async function createRoom() {
 }
 
 async function joinRoom() {
-  const input = document.getElementById("joinCode").value.trim();
-  if (!input) return alert("방 코드를 입력해줘");
+  const code = document.getElementById("joinCode").value.trim();
+  const name = document.getElementById("joinName").value.trim();
 
-  const res = await fetch("/check-room?room=" + encodeURIComponent(input));
+  if (!code) return alert("방 코드를 입력해줘");
+  if (!name) return alert("이름을 입력해줘");
+
+  const res = await fetch("/check-room?room=" + encodeURIComponent(code));
   const data = await res.json();
 
   if (!data.exists) {
@@ -412,12 +462,19 @@ async function joinRoom() {
     return;
   }
 
-  roomCode = input;
+  saveName(name);
+  roomCode = code;
   saveRoom(roomCode);
   startChat();
 }
 
-async function openSavedRoom(code) {
+function openSavedRoom(code) {
+  if (!userName) {
+    const name = prompt("이름을 입력해줘");
+    if (!name) return;
+    saveName(name.trim());
+  }
+
   roomCode = code;
   startChat();
 }
@@ -442,11 +499,8 @@ async function leaveRoom() {
     body: JSON.stringify({ userId, roomCode })
   });
 
-  if (IS_ADMIN === "true") {
-    goMain();
-  } else {
-    showJoinRoomForGuest();
-  }
+  if (IS_ADMIN === "true") goMain();
+  else showJoinRoomForGuest();
 }
 
 function stopTimers() {
@@ -460,7 +514,7 @@ async function enter() {
   const res = await fetch("/enter", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ userId, roomCode })
+    body: JSON.stringify({ userId, roomCode, userName })
   });
 
   const data = await res.json();
@@ -484,33 +538,90 @@ async function loadMessages() {
   box.innerHTML = "";
 
   data.forEach(m => {
+    const isMine = m.userId === userId;
+    const wrap = document.createElement("div");
+    wrap.className = "msg-wrap " + (isMine ? "mine" : "other");
+
     const div = document.createElement("div");
-    div.className = "msg";
-    div.innerHTML = "<div class='name'>" + escapeHtml(m.name) + "</div>" + escapeHtml(m.text);
-    box.appendChild(div);
+    div.className = "msg " + (isMine ? "mine" : "other");
+
+    let content = "<div class='name'>" + escapeHtml(m.name) + "</div>";
+
+    if (m.type === "image") {
+      content += "<img class='chat-img' src='" + m.data + "'>";
+    } else if (m.type === "video") {
+      content += "<video class='chat-video' src='" + m.data + "' controls></video>";
+    } else {
+      content += escapeHtml(m.text);
+    }
+
+    div.innerHTML = content;
+    wrap.appendChild(div);
+    box.appendChild(wrap);
   });
 
   box.scrollTop = box.scrollHeight;
 }
 
-async function send() {
-  const name = document.getElementById("name").value || "익명";
+async function sendText() {
   const text = document.getElementById("text").value;
-
   if (!text.trim()) return;
 
   await fetch("/send", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ userId, roomCode, name, text })
+    body: JSON.stringify({
+      userId,
+      roomCode,
+      name: userName,
+      type: "text",
+      text
+    })
   });
 
   document.getElementById("text").value = "";
   loadMessages();
 }
 
+function sendFile() {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return;
+
+  if (file.size > ${MAX_UPLOAD_SIZE}) {
+    alert("파일은 5MB 이하만 가능해.");
+    return;
+  }
+
+  if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+    alert("사진이나 영상만 가능해.");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = async function() {
+    await fetch("/send", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        userId,
+        roomCode,
+        name: userName,
+        type: file.type.startsWith("image/") ? "image" : "video",
+        data: reader.result,
+        fileName: file.name
+      })
+    });
+
+    document.getElementById("fileInput").value = "";
+    loadMessages();
+  };
+
+  reader.readAsDataURL(file);
+}
+
 function escapeHtml(text) {
-  return String(text)
+  return String(text || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -520,12 +631,50 @@ function escapeHtml(text) {
 
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && document.getElementById("text") === document.activeElement) {
-    send();
+    sendText();
   }
 });
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/service-worker.js");
+}
 </script>
 </body>
 </html>
+`;
+
+const manifest = JSON.stringify({
+  name: "Z Chat",
+  short_name: "ZChat",
+  start_url: "/",
+  display: "standalone",
+  background_color: "#111111",
+  theme_color: "#111111",
+  orientation: "portrait",
+  icons: [
+    {
+      src: "https://via.placeholder.com/192.png?text=Z",
+      sizes: "192x192",
+      type: "image/png"
+    },
+    {
+      src: "https://via.placeholder.com/512.png?text=Z",
+      sizes: "512x512",
+      type: "image/png"
+    }
+  ]
+});
+
+const serviceWorker = `
+self.addEventListener("install", event => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", event => {});
 `;
 
 function getRoom(code) {
@@ -543,6 +692,17 @@ function sendHtml(res, isAdmin) {
   res.end(html.replace("__IS_ADMIN__", isAdmin ? "true" : "false"));
 }
 
+function readBody(req, callback) {
+  let body = "";
+  req.on("data", chunk => {
+    body += chunk;
+    if (body.length > 8 * 1024 * 1024) {
+      req.destroy();
+    }
+  });
+  req.on("end", () => callback(body));
+}
+
 const server = http.createServer((req, res) => {
   if (req.url === "/") {
     sendHtml(res, false);
@@ -552,10 +712,18 @@ const server = http.createServer((req, res) => {
     sendHtml(res, true);
   }
 
+  else if (req.url === "/manifest.json") {
+    res.writeHead(200, {"Content-Type":"application/json"});
+    res.end(manifest);
+  }
+
+  else if (req.url === "/service-worker.js") {
+    res.writeHead(200, {"Content-Type":"application/javascript"});
+    res.end(serviceWorker);
+  }
+
   else if (req.url === "/create-room" && req.method === "POST") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
+    readBody(req, body => {
       const data = JSON.parse(body);
       const code = String(data.roomCode || "").trim();
 
@@ -580,15 +748,13 @@ const server = http.createServer((req, res) => {
   }
 
   else if (req.url === "/enter" && req.method === "POST") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
+    readBody(req, body => {
       const data = JSON.parse(body);
       const room = getRoom(data.roomCode);
       const now = Date.now();
 
-      for (const [id, time] of room.users) {
-        if (now - time > 10000) room.users.delete(id);
+      for (const [id, info] of room.users) {
+        if (now - info.time > 10000) room.users.delete(id);
       }
 
       if (!room.users.has(data.userId) && room.users.size >= MAX_USERS_PER_ROOM) {
@@ -597,7 +763,10 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      room.users.set(data.userId, now);
+      room.users.set(data.userId, {
+        name: data.userName || "익명",
+        time: now
+      });
 
       res.writeHead(200, {"Content-Type":"application/json"});
       res.end(JSON.stringify({ ok:true, count:room.users.size }));
@@ -605,9 +774,7 @@ const server = http.createServer((req, res) => {
   }
 
   else if (req.url === "/leave" && req.method === "POST") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
+    readBody(req, body => {
       const data = JSON.parse(body);
       const room = getRoom(data.roomCode);
       room.users.delete(data.userId);
@@ -627,9 +794,7 @@ const server = http.createServer((req, res) => {
   }
 
   else if (req.url === "/send" && req.method === "POST") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
+    readBody(req, body => {
       const data = JSON.parse(body);
       const room = getRoom(data.roomCode);
 
@@ -640,8 +805,13 @@ const server = http.createServer((req, res) => {
       }
 
       room.messages.push({
-        name: data.name,
-        text: data.text
+        userId: data.userId,
+        name: data.name || "익명",
+        type: data.type || "text",
+        text: data.text || "",
+        data: data.data || "",
+        fileName: data.fileName || "",
+        time: Date.now()
       });
 
       if (room.messages.length > 100) room.messages.shift();
