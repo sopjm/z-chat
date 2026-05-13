@@ -357,15 +357,11 @@ function renderRooms() {
     return;
   }
   savedRooms.forEach(code => {
-    box.innerHTML += `
-      <div class="room-item" onclick="openSavedRoom('${escapeAttr(code)}')">
-        <div class="room-item-title">${escapeHtml(code)}</div>
-        <div class="room-item-sub">다시 입장하기</div>
-      </div>
-    `;
-  });
-}
-
+ box.innerHTML +=
+  "<div class='room-item' onclick=\"openSavedRoom('" + escapeAttr(code) + "')\">" +
+    "<div class='room-item-title'>" + escapeHtml(code) + "</div>" +
+    "<div class='room-item-sub'>다시 입장하기</div>" +
+  "</div>";
 async function loadAdminStats() {
   if (IS_ADMIN !== "true") return;
   const res = await fetch("/admin-stats");
@@ -378,15 +374,11 @@ async function loadAdminStats() {
     return;
   }
   data.rooms.forEach(room => {
-    box.innerHTML += `
-      <div class="room-item" onclick="openSavedRoom('${escapeAttr(room.code)}')">
-        <div class="room-item-title">방 코드: ${escapeHtml(room.code)}</div>
-        <div class="room-item-sub">접속자 ${room.users}명 / 메시지 ${room.messages}개</div>
-      </div>
-    `;
-  });
-}
-
+   box.innerHTML +=
+  "<div class='room-item' onclick=\"openSavedRoom('" + escapeAttr(room.code) + "')\">" +
+    "<div class='room-item-title'>방 코드: " + escapeHtml(room.code) + "</div>" +
+    "<div class='room-item-sub'>접속자 " + room.users + "명 / 메시지 " + room.messages + "개</div>" +
+  "</div>";
 async function createRoom() {
   const code = document.getElementById("createCode").value.trim();
   const name = document.getElementById("createName").value.trim();
