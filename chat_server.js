@@ -1,10 +1,20 @@
 const http = require("http");
+const webpush = require("web-push");
 
 const PORT = process.env.PORT || 3000;
 const MAX_USERS_PER_ROOM = 6;
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:test@example.com";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
 const rooms = {};
+const pushUsers = {};
 
 const userIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">' +
@@ -56,6 +66,7 @@ const serviceWorker =
   'self.addEventListener("install", function(event){ self.skipWaiting(); });\n' +
   'self.addEventListener("activate", function(event){ event.waitUntil(self.clients.claim()); });\n' +
   'self.addEventListener("fetch", function(event){ event.respondWith(fetch(event.request)); });\n' +
+  'self.addEventListener("push", function(event){ var data = {}; try { data = event.data.json(); } catch(e) {} event.waitUntil(self.registration.showNotification(data.title || "Z Chat", { body: data.body || "새 메시지가 도착했습니다.", icon: data.icon || "/icon.svg", badge: data.icon || "/icon.svg", vibrate: [200,100,200], data: { url: data.url || "/" } })); });\n' +
   'self.addEventListener("message", function(event){ var data = event.data || {}; if(data.type === "SHOW_NOTIFICATION"){ self.registration.showNotification(data.title || "Z Chat", { body: data.body || "새 메시지가 도착했습니다.", icon: data.icon || "/icon.svg", badge: data.icon || "/icon.svg", vibrate: [200,100,200], data: { url: data.url || "/" } }); } });\n' +
   'self.addEventListener("notificationclick", function(event){ event.notification.close(); var url = event.notification.data && event.notification.data.url ? event.notification.data.url : "/"; event.waitUntil(clients.openWindow(url)); });';
 
@@ -79,14 +90,7 @@ const html = String.raw`
 html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;font-family:Arial,sans-serif}
 .app{width:100%;height:100dvh;background:#2b2b2b;display:flex;flex-direction:column}
 @media(min-width:700px){.app{max-width:460px;margin:auto}}
-@media(orientation:landscape) and (max-height:600px){
-  .app{max-width:900px}
-  .header{min-height:52px;font-size:18px}
-  .page{padding:12px}
-  .card{padding:16px}
-  #messages{padding:10px 18px}
-  .msg{max-width:60%}
-}
+@media(orientation:landscape) and (max-height:600px){.app{max-width:900px}.header{min-height:52px;font-size:18px}.page{padding:12px}.card{padding:16px}#messages{padding:10px 18px}.msg{max-width:60%}}
 #loading{position:fixed;inset:0;background:#000;z-index:9999;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:15px}
 .lightning{font-size:80px;animation:flash .8s infinite alternate}
 .logo{font-size:42px;font-weight:900;letter-spacing:6px}
@@ -188,8 +192,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
       </div>
       <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
       <div class="small-note">
-        알림은 앱/브라우저가 백그라운드에 살아있을 때 작동합니다.<br>
-        완전히 꺼진 상태 푸시는 Web Push 구성이 더 필요합니다.
+        알림 허용 후에는 앱이 완전히 꺼져 있어도 Web Push 알림을 받을 수 있습니다.<br>
+        단, 브라우저/기기 설정에서 알림이 차단되어 있으면 오지 않습니다.
       </div>
     </div>
   </div>
@@ -209,6 +213,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 <script>
 const IS_ADMIN="__IS_ADMIN__";
 const MAX_UPLOAD_SIZE_CLIENT=__MAX_UPLOAD_SIZE__;
+const VAPID_PUBLIC_KEY="__VAPID_PUBLIC_KEY__";
 
 var userId=localStorage.getItem("z_userId");
 var userName=localStorage.getItem("z_userName")||"";
@@ -234,6 +239,10 @@ setTimeout(function(){
 
   if(IS_ADMIN==="true") goMain();
   else showJoinRoomForGuest();
+
+  if(notificationsEnabled){
+    subscribePush();
+  }
 },1200);
 
 function hideAllPages(){
@@ -317,11 +326,13 @@ async function toggleNotifications(){
     }
 
     notificationsEnabled=true;
+    localStorage.setItem("z_notifications","true");
+    await subscribePush();
   }else{
     notificationsEnabled=false;
+    localStorage.setItem("z_notifications","false");
   }
 
-  localStorage.setItem("z_notifications",String(notificationsEnabled));
   updateSettingsButtons();
 }
 
@@ -331,6 +342,50 @@ function toggleSound(){
   updateSettingsButtons();
 
   if(soundEnabled) playBeep();
+}
+
+async function subscribePush(){
+  try{
+    if(!VAPID_PUBLIC_KEY) return;
+    if(!("serviceWorker" in navigator)) return;
+    if(!("PushManager" in window)) return;
+    if(Notification.permission!=="granted") return;
+
+    var reg=await navigator.serviceWorker.ready;
+    var sub=await reg.pushManager.getSubscription();
+
+    if(!sub){
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    await fetch("/subscribe",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        userId:userId,
+        roomCode:roomCode,
+        subscription:sub
+      })
+    });
+  }catch(e){
+    console.log("push subscribe error",e);
+  }
+}
+
+function urlBase64ToUint8Array(base64String){
+  var padding="=".repeat((4-base64String.length%4)%4);
+  var base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  var rawData=window.atob(base64);
+  var outputArray=new Uint8Array(rawData.length);
+
+  for(var i=0;i<rawData.length;i++){
+    outputArray[i]=rawData.charCodeAt(i);
+  }
+
+  return outputArray;
 }
 
 function getSavedRooms(){
@@ -478,6 +533,7 @@ async function startChat(){
   document.getElementById("leaveBtn").style.display="block";
 
   await enter();
+  await subscribePush();
   await loadMessages();
 
   enterTimer=setInterval(enter,3000);
@@ -765,10 +821,54 @@ function sendHtml(res,isAdmin){
     .replaceAll("__ICON__",isAdmin ? "/admin-icon.svg" : "/icon.svg")
     .replaceAll("__LOGO__",isAdmin ? "Z ADMIN" : "Z CHAT")
     .replaceAll("__HEADER__",isAdmin ? "👑 Z Admin" : "⚡ Z Chat")
-    .replaceAll("__MAX_UPLOAD_SIZE__",String(MAX_UPLOAD_SIZE));
+    .replaceAll("__MAX_UPLOAD_SIZE__",String(MAX_UPLOAD_SIZE))
+    .replaceAll("__VAPID_PUBLIC_KEY__",VAPID_PUBLIC_KEY);
 
   res.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});
   res.end(page);
+}
+
+function savePushUser(userId, roomCode, subscription){
+  if(!userId || !subscription) return;
+
+  if(!pushUsers[userId]){
+    pushUsers[userId]={
+      subscription:subscription,
+      rooms:{}
+    };
+  }
+
+  pushUsers[userId].subscription=subscription;
+
+  if(roomCode){
+    pushUsers[userId].rooms[roomCode]=true;
+  }
+}
+
+async function sendPushToRoom(roomCode, senderId, payload){
+  if(!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+
+  var sendList=[];
+
+  for(var id in pushUsers){
+    if(id===senderId) continue;
+
+    var item=pushUsers[id];
+
+    if(item.rooms && item.rooms[roomCode] && item.subscription){
+      sendList.push({id:id, subscription:item.subscription});
+    }
+  }
+
+  for(var i=0;i<sendList.length;i++){
+    try{
+      await webpush.sendNotification(sendList[i].subscription, JSON.stringify(payload));
+    }catch(e){
+      if(e.statusCode===404 || e.statusCode===410){
+        delete pushUsers[sendList[i].id];
+      }
+    }
+  }
 }
 
 const server=http.createServer(function(req,res){
@@ -803,6 +903,17 @@ const server=http.createServer(function(req,res){
   else if(req.url==="/admin-icon.svg"){
     res.writeHead(200,{"Content-Type":"image/svg+xml"});
     res.end(adminIconSvg);
+  }
+
+  else if(req.url==="/subscribe" && req.method==="POST"){
+    readBody(req,function(body){
+      var data=JSON.parse(body);
+
+      savePushUser(data.userId, data.roomCode, data.subscription);
+
+      res.writeHead(200,{"Content-Type":"application/json"});
+      res.end(JSON.stringify({ok:true}));
+    });
   }
 
   else if(req.url==="/create-room" && req.method==="POST"){
@@ -873,6 +984,10 @@ const server=http.createServer(function(req,res){
         time:Date.now()
       });
 
+      if(pushUsers[data.userId] && data.roomCode){
+        pushUsers[data.userId].rooms[data.roomCode]=true;
+      }
+
       res.writeHead(200,{"Content-Type":"application/json"});
       res.end(JSON.stringify({ok:true,count:room.users.size}));
     });
@@ -904,7 +1019,7 @@ const server=http.createServer(function(req,res){
       var data=JSON.parse(body);
       var room=getRoom(data.roomCode);
 
-      room.messages.push({
+      var msg={
         userId:data.userId,
         name:data.name || "익명",
         type:data.type || "text",
@@ -912,11 +1027,25 @@ const server=http.createServer(function(req,res){
         data:data.data || "",
         fileName:data.fileName || "",
         time:Date.now()
-      });
+      };
+
+      room.messages.push(msg);
 
       if(room.messages.length>100){
         room.messages.shift();
       }
+
+      var bodyText =
+        msg.type==="image" ? "사진을 보냈습니다." :
+        msg.type==="video" ? "영상을 보냈습니다." :
+        msg.text || "새 메시지";
+
+      sendPushToRoom(data.roomCode, data.userId, {
+        title:msg.name || "Z Chat",
+        body:bodyText,
+        icon:"/icon.svg",
+        url:"/"
+      });
 
       res.writeHead(200);
       res.end("OK");
