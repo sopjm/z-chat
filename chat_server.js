@@ -2,7 +2,7 @@ const http = require("http");
 
 const PORT = process.env.PORT || 3000;
 const MAX_USERS_PER_ROOM = 6;
-const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024;
 
 let rooms = {};
 
@@ -11,258 +11,268 @@ const html = `
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
 <title>Z Chat</title>
 
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#111111">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<meta property="og:title" content="Z Chat">
-<meta property="og:description" content="초대코드로 들어오는 6인 채팅방">
-<meta property="og:image" content="https://via.placeholder.com/300x300/000000/ffffff.png?text=Z">
-<meta property="og:type" content="website">
 
 <style>
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: #111;
-  color: white;
-  font-family: Arial, sans-serif;
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
 }
 
-#loading {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
+html, body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#111;
+  font-family:Arial,sans-serif;
 }
 
-.lightning {
-  font-size: 80px;
-  animation: flash 0.8s infinite alternate;
+body{
+  color:white;
 }
 
-.logo {
-  font-size: 34px;
-  font-weight: bold;
-  letter-spacing: 5px;
+#loading{
+  position:fixed;
+  inset:0;
+  background:#000;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
 }
 
-@keyframes flash {
-  from { opacity: 0.35; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1.15); }
+.logo{
+  font-size:42px;
+  font-weight:900;
+  letter-spacing:6px;
 }
 
-.app {
-  max-width: 460px;
-  height: 100vh;
-  margin: 0 auto;
-  background: #2b2b2b;
-  display: flex;
-  flex-direction: column;
+.lightning{
+  font-size:80px;
+  animation:flash 0.8s infinite alternate;
 }
 
-.header {
-  background: #181818;
-  padding: 16px;
-  text-align: center;
-  font-size: 22px;
-  font-weight: bold;
-  border-bottom: 1px solid #444;
-  position: relative;
+@keyframes flash{
+  from{
+    opacity:0.4;
+    transform:scale(0.9);
+  }
+  to{
+    opacity:1;
+    transform:scale(1.15);
+  }
 }
 
-.leave-btn {
-  position: absolute;
-  left: 10px;
-  top: 12px;
-  background: #333;
-  color: white;
-  border: 1px solid #555;
-  border-radius: 10px;
-  padding: 7px 10px;
-  cursor: pointer;
-  display: none;
+.app{
+  width:100%;
+  height:100dvh;
+  background:#2b2b2b;
+  display:flex;
+  flex-direction:column;
 }
 
-.page {
-  flex: 1;
-  padding: 18px;
-  overflow-y: auto;
+@media(min-width:700px){
+  .app{
+    max-width:460px;
+    margin:auto;
+  }
 }
 
-.card {
-  width: 100%;
-  background: #3a3a3a;
-  padding: 22px;
-  border-radius: 18px;
-  text-align: center;
-  box-shadow: 0 0 20px rgba(0,0,0,0.4);
-  margin-bottom: 14px;
+.header{
+  height:62px;
+  background:#181818;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  border-bottom:1px solid #444;
+  font-size:22px;
+  font-weight:700;
 }
 
-.card input {
-  width: 100%;
-  margin-top: 12px;
-  padding: 15px;
-  border: none;
-  border-radius: 12px;
-  font-size: 17px;
-  background: #1f1f1f;
-  color: white;
-  outline: none;
+.leave-btn{
+  position:absolute;
+  left:12px;
+  background:#333;
+  color:white;
+  border:none;
+  padding:9px 12px;
+  border-radius:10px;
 }
 
-.card button {
-  width: 100%;
-  margin-top: 12px;
-  padding: 15px;
-  border: none;
-  border-radius: 12px;
-  background: white;
-  color: black;
-  font-size: 17px;
-  font-weight: bold;
-  cursor: pointer;
+.page{
+  flex:1;
+  overflow:auto;
+  padding:18px;
 }
 
-.sub-btn {
-  background: #555 !important;
-  color: white !important;
+.card{
+  background:#3a3a3a;
+  border-radius:22px;
+  padding:22px;
+  text-align:center;
+  margin-bottom:16px;
 }
 
-.room-list-title {
-  font-size: 15px;
-  color: #ccc;
-  margin: 18px 0 10px;
+.card h2{
+  margin-bottom:10px;
 }
 
-.room-item {
-  background: #1f1f1f;
-  padding: 14px;
-  border-radius: 14px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  border: 1px solid #444;
+.card p{
+  opacity:0.8;
+  margin-bottom:16px;
 }
 
-.room-name {
-  font-size: 17px;
-  font-weight: bold;
+.card input{
+  width:100%;
+  margin-top:10px;
+  padding:15px;
+  border:none;
+  border-radius:14px;
+  background:#1f1f1f;
+  color:white;
+  font-size:16px;
 }
 
-.room-sub {
-  color: #aaa;
-  font-size: 13px;
-  margin-top: 4px;
+.card button{
+  width:100%;
+  margin-top:12px;
+  padding:15px;
+  border:none;
+  border-radius:14px;
+  background:white;
+  color:black;
+  font-size:16px;
+  font-weight:bold;
 }
 
-#chatPage {
-  display: none;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
+.sub-btn{
+  background:#555 !important;
+  color:white !important;
 }
 
-.status {
-  padding: 9px;
-  text-align: center;
-  font-size: 13px;
-  background: #333;
-  color: #ccc;
+.room-item{
+  background:#1f1f1f;
+  border:1px solid #444;
+  border-radius:16px;
+  padding:15px;
+  margin-top:10px;
 }
 
-#messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 14px;
-  background: #2b2b2b;
+.room-item-title{
+  font-size:18px;
+  font-weight:bold;
 }
 
-.msg-wrap {
-  display: flex;
-  margin: 8px 0;
+.room-item-sub{
+  margin-top:4px;
+  font-size:13px;
+  opacity:0.7;
 }
 
-.msg-wrap.mine {
-  justify-content: flex-end;
+#chatPage{
+  display:none;
+  flex-direction:column;
+  flex:1;
+  min-height:0;
 }
 
-.msg-wrap.other {
-  justify-content: flex-start;
+.status{
+  padding:9px;
+  text-align:center;
+  background:#333;
+  font-size:13px;
 }
 
-.msg {
-  max-width: 75%;
-  padding: 10px 13px;
-  border-radius: 16px;
-  line-height: 1.4;
-  word-break: break-word;
+#messages{
+  flex:1;
+  overflow:auto;
+  padding:12px;
 }
 
-.msg.mine {
-  background: #f7e600;
-  color: #111;
-  border-bottom-right-radius: 4px;
+.msg-wrap{
+  display:flex;
+  margin:10px 0;
 }
 
-.msg.other {
-  background: #444;
-  color: white;
-  border-bottom-left-radius: 4px;
+.msg-wrap.mine{
+  justify-content:flex-end;
 }
 
-.name {
-  font-size: 12px;
-  margin-bottom: 4px;
-  font-weight: bold;
-  opacity: 0.75;
+.msg-wrap.other{
+  justify-content:flex-start;
 }
 
-.chat-img, .chat-video {
-  max-width: 100%;
-  border-radius: 12px;
-  margin-top: 5px;
+.msg{
+  max-width:76%;
+  padding:11px 13px;
+  border-radius:18px;
+  word-break:break-word;
 }
 
-.input-area {
-  display: flex;
-  gap: 6px;
-  padding: 10px;
-  background: #181818;
-  border-top: 1px solid #444;
+.msg.mine{
+  background:#f7e600;
+  color:black;
+  border-bottom-right-radius:5px;
 }
 
-.input-area input[type="text"] {
-  border: none;
-  padding: 12px;
-  border-radius: 12px;
-  background: #333;
-  color: white;
-  font-size: 15px;
-  outline: none;
-  flex: 1;
+.msg.other{
+  background:#444;
+  color:white;
+  border-bottom-left-radius:5px;
 }
 
-.input-area button {
-  border: none;
-  padding: 12px;
-  border-radius: 12px;
-  background: white;
-  color: black;
-  font-weight: bold;
+.name{
+  font-size:12px;
+  margin-bottom:5px;
+  opacity:0.7;
+  font-weight:bold;
 }
 
-.file-btn {
-  background: #555 !important;
-  color: white !important;
+.chat-img,
+.chat-video{
+  width:100%;
+  border-radius:14px;
+  margin-top:6px;
+}
+
+.input-area{
+  display:flex;
+  gap:6px;
+  padding:10px;
+  background:#181818;
+  border-top:1px solid #444;
+}
+
+.input-area input[type="text"]{
+  flex:1;
+  border:none;
+  border-radius:14px;
+  padding:13px;
+  background:#333;
+  color:white;
+  font-size:15px;
+}
+
+.input-area button{
+  border:none;
+  border-radius:14px;
+  padding:13px;
+  background:white;
+  color:black;
+  font-weight:bold;
+}
+
+.file-btn{
+  background:#555 !important;
+  color:white !important;
 }
 </style>
 </head>
@@ -275,559 +285,749 @@ body {
 </div>
 
 <div class="app">
+
   <div class="header">
-    <button id="leaveBtn" class="leave-btn" onclick="leaveRoom()">나가기</button>
+    <button id="leaveBtn" class="leave-btn" onclick="leaveRoom()" style="display:none;">
+      나가기
+    </button>
+
     ⚡ Z Chat
   </div>
 
   <div id="mainPage" class="page">
+
     <div class="card">
       <h2>관리자 화면</h2>
-      <p>방을 만들거나 기존 방에 들어가세요</p>
+      <p>방을 만들거나 들어가세요</p>
+
       <button onclick="showCreateRoom()">방 만들기</button>
-      <button class="sub-btn" onclick="showJoinRoom()">방 들어가기</button>
+
+      <button class="sub-btn" onclick="showJoinRoom()">
+        방 들어가기
+      </button>
     </div>
 
-    <div class="room-list-title">내 채팅방</div>
     <div id="myRooms"></div>
+
   </div>
 
   <div id="createPage" class="page" style="display:none;">
+
     <div class="card">
+
       <h2>방 만들기</h2>
-      <input id="createCode" placeholder="방 코드 예: z9x7qk21p">
+
+      <input id="createCode" placeholder="방 코드">
+
       <input id="createName" placeholder="내 이름">
+
       <button onclick="createRoom()">방 만들기</button>
+
       <button class="sub-btn" onclick="goMain()">뒤로가기</button>
+
     </div>
+
   </div>
 
   <div id="joinPage" class="page" style="display:none;">
+
     <div class="card">
+
       <h2>방 들어가기</h2>
-      <p id="joinGuide">친구에게 받은 방 코드를 입력하세요</p>
-      <input id="joinCode" placeholder="초대코드 입력">
+
+      <input id="joinCode" placeholder="방 코드">
+
       <input id="joinName" placeholder="내 이름">
+
       <button onclick="joinRoom()">입장하기</button>
-      <button id="joinBackBtn" class="sub-btn" onclick="goMain()">뒤로가기</button>
+
     </div>
+
   </div>
 
   <div id="chatPage">
-    <div class="status" id="status">접속 중...</div>
+
+    <div class="status" id="status">
+      접속중...
+    </div>
+
     <div id="messages"></div>
 
     <div class="input-area">
-      <button class="file-btn" onclick="document.getElementById('fileInput').click()">＋</button>
-      <input id="fileInput" type="file" accept="image/*,video/*" style="display:none" onchange="sendFile()">
+
+      <button class="file-btn"
+        onclick="document.getElementById('fileInput').click()">
+        ＋
+      </button>
+
+      <input
+        id="fileInput"
+        type="file"
+        accept="image/*,video/*"
+        style="display:none"
+        onchange="sendFile()"
+      >
+
       <input id="text" type="text" placeholder="메시지 입력">
+
       <button onclick="sendText()">전송</button>
+
     </div>
+
   </div>
+
 </div>
 
 <script>
+
 const IS_ADMIN = "__IS_ADMIN__";
 
 let userId = localStorage.getItem("z_userId");
 let userName = localStorage.getItem("z_userName") || "";
-let roomCode = "";
-let enterTimer = null;
-let messageTimer = null;
 
-if (!userId) {
+let roomCode = "";
+
+if(!userId){
   userId = Math.random().toString(36).substring(2);
   localStorage.setItem("z_userId", userId);
 }
 
-setTimeout(() => {
+setTimeout(()=>{
+
   document.getElementById("loading").style.display = "none";
 
   document.getElementById("joinName").value = userName;
   document.getElementById("createName").value = userName;
 
-  if (IS_ADMIN === "true") {
+  if(IS_ADMIN === "true"){
     goMain();
-  } else {
+  }else{
     showJoinRoomForGuest();
   }
-}, 1300);
 
-function getSavedRooms() {
-  return JSON.parse(localStorage.getItem("z_rooms") || "[]");
-}
+},1200);
 
-function saveRoom(code) {
-  let rooms = getSavedRooms();
-  if (!rooms.includes(code)) {
-    rooms.unshift(code);
-    localStorage.setItem("z_rooms", JSON.stringify(rooms));
-  }
-}
+function hideAllPages(){
 
-function renderMyRooms() {
-  const box = document.getElementById("myRooms");
-  const rooms = getSavedRooms();
-
-  if (rooms.length === 0) {
-    box.innerHTML = "<div class='room-sub'>아직 들어간 방이 없습니다.</div>";
-    return;
-  }
-
-  box.innerHTML = "";
-
-  rooms.forEach(code => {
-    const div = document.createElement("div");
-    div.className = "room-item";
-    div.onclick = () => openSavedRoom(code);
-    div.innerHTML = "<div class='room-name'>채팅방 " + escapeHtml(code) + "</div><div class='room-sub'>눌러서 다시 입장</div>";
-    box.appendChild(div);
-  });
-}
-
-function hideAllPages() {
   document.getElementById("mainPage").style.display = "none";
   document.getElementById("createPage").style.display = "none";
   document.getElementById("joinPage").style.display = "none";
   document.getElementById("chatPage").style.display = "none";
 }
 
-function goMain() {
-  stopTimers();
-  roomCode = "";
-  document.getElementById("leaveBtn").style.display = "none";
+function goMain(){
+
   hideAllPages();
+
   document.getElementById("mainPage").style.display = "block";
-  renderMyRooms();
+
+  renderRooms();
+
+  document.getElementById("leaveBtn").style.display = "none";
 }
 
-function showCreateRoom() {
+function showCreateRoom(){
+
   hideAllPages();
+
   document.getElementById("createPage").style.display = "block";
 }
 
-function showJoinRoom() {
+function showJoinRoom(){
+
   hideAllPages();
+
   document.getElementById("joinPage").style.display = "block";
-  document.getElementById("joinBackBtn").style.display = "block";
 }
 
-function showJoinRoomForGuest() {
+function showJoinRoomForGuest(){
+
   hideAllPages();
+
   document.getElementById("joinPage").style.display = "block";
-  document.getElementById("joinBackBtn").style.display = "none";
-  document.getElementById("joinGuide").innerText = "방 코드와 이름을 입력하세요";
 }
 
-function saveName(name) {
-  userName = name;
-  localStorage.setItem("z_userName", userName);
+function saveRoom(code){
+
+  let rooms = JSON.parse(localStorage.getItem("z_rooms") || "[]");
+
+  if(!rooms.includes(code)){
+    rooms.unshift(code);
+  }
+
+  localStorage.setItem("z_rooms", JSON.stringify(rooms));
 }
 
-async function createRoom() {
+function renderRooms(){
+
+  const box = document.getElementById("myRooms");
+
+  const rooms = JSON.parse(localStorage.getItem("z_rooms") || "[]");
+
+  box.innerHTML = "";
+
+  rooms.forEach(code=>{
+
+    box.innerHTML += \`
+      <div class="room-item" onclick="openSavedRoom('\${code}')">
+        <div class="room-item-title">\${code}</div>
+        <div class="room-item-sub">다시 입장하기</div>
+      </div>
+    \`;
+  });
+}
+
+async function createRoom(){
+
   const code = document.getElementById("createCode").value.trim();
   const name = document.getElementById("createName").value.trim();
 
-  if (!code) return alert("방 코드를 입력해줘");
-  if (!name) return alert("이름을 입력해줘");
+  if(!code) return alert("방 코드 입력");
+  if(!name) return alert("이름 입력");
 
-  saveName(name);
+  userName = name;
+
+  localStorage.setItem("z_userName", name);
+
   roomCode = code;
 
-  const res = await fetch("/create-room", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ roomCode })
+  await fetch("/create-room",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      roomCode
+    })
   });
 
-  const data = await res.json();
-  if (!data.ok) return alert(data.message || "방 만들기 실패");
+  saveRoom(code);
 
-  saveRoom(roomCode);
   startChat();
 }
 
-async function joinRoom() {
+async function joinRoom(){
+
   const code = document.getElementById("joinCode").value.trim();
   const name = document.getElementById("joinName").value.trim();
 
-  if (!code) return alert("방 코드를 입력해줘");
-  if (!name) return alert("이름을 입력해줘");
+  if(!code) return alert("방 코드 입력");
+  if(!name) return alert("이름 입력");
 
-  const res = await fetch("/check-room?room=" + encodeURIComponent(code));
+  const res = await fetch("/check-room?room="+encodeURIComponent(code));
+
   const data = await res.json();
 
-  if (!data.exists) {
-    alert("없는 방 코드야. 방 만든 사람이 먼저 만들어야 해.");
-    return;
+  if(!data.exists){
+    return alert("없는 방 코드");
   }
 
-  saveName(name);
+  userName = name;
+
+  localStorage.setItem("z_userName", name);
+
   roomCode = code;
-  saveRoom(roomCode);
+
+  saveRoom(code);
+
   startChat();
 }
 
-function openSavedRoom(code) {
-  if (!userName) {
-    const name = prompt("이름을 입력해줘");
-    if (!name) return;
-    saveName(name.trim());
-  }
+function openSavedRoom(code){
 
   roomCode = code;
+
   startChat();
 }
 
-function startChat() {
+async function startChat(){
+
   hideAllPages();
+
   document.getElementById("chatPage").style.display = "flex";
+
   document.getElementById("leaveBtn").style.display = "block";
 
-  enter();
+  await enter();
+
   loadMessages();
 
-  stopTimers();
-  enterTimer = setInterval(enter, 3000);
-  messageTimer = setInterval(loadMessages, 1000);
+  setInterval(loadMessages,1000);
 }
 
-async function leaveRoom() {
-  await fetch("/leave", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ userId, roomCode })
+async function leaveRoom(){
+
+  await fetch("/leave",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      userId,
+      roomCode
+    })
   });
 
-  if (IS_ADMIN === "true") goMain();
-  else showJoinRoomForGuest();
+  if(IS_ADMIN === "true"){
+    goMain();
+  }else{
+    showJoinRoomForGuest();
+  }
 }
 
-function stopTimers() {
-  if (enterTimer) clearInterval(enterTimer);
-  if (messageTimer) clearInterval(messageTimer);
-}
+async function enter(){
 
-async function enter() {
-  if (!roomCode) return;
-
-  const res = await fetch("/enter", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ userId, roomCode, userName })
+  const res = await fetch("/enter",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      userId,
+      roomCode,
+      userName
+    })
   });
 
   const data = await res.json();
 
-  if (!data.ok) {
-    document.body.innerHTML = "<h1 style='text-align:center;margin-top:40vh;'>방이 꽉 찼습니다.</h1>";
-    return;
-  }
-
   document.getElementById("status").innerText =
-    "방 코드: " + roomCode + " / 접속자: " + data.count + " / 6";
+    "방 코드: "+roomCode+" / 접속자: "+data.count+"/6";
 }
 
-async function loadMessages() {
-  if (!roomCode) return;
+async function loadMessages(){
 
-  const res = await fetch("/messages?room=" + encodeURIComponent(roomCode));
+  const res = await fetch("/messages?room="+encodeURIComponent(roomCode));
+
   const data = await res.json();
 
   const box = document.getElementById("messages");
+
   box.innerHTML = "";
 
-  data.forEach(m => {
-    const isMine = m.userId === userId;
-    const wrap = document.createElement("div");
-    wrap.className = "msg-wrap " + (isMine ? "mine" : "other");
+  data.forEach(m=>{
 
-    const div = document.createElement("div");
-    div.className = "msg " + (isMine ? "mine" : "other");
+    const mine = m.userId === userId;
 
-    let content = "<div class='name'>" + escapeHtml(m.name) + "</div>";
+    let content = "";
 
-    if (m.type === "image") {
-      content += "<img class='chat-img' src='" + m.data + "'>";
-    } else if (m.type === "video") {
-      content += "<video class='chat-video' src='" + m.data + "' controls></video>";
-    } else {
-      content += escapeHtml(m.text);
+    if(m.type === "image"){
+
+      content =
+        "<img class='chat-img' src='"+m.data+"'>";
+
+    }else if(m.type === "video"){
+
+      content =
+        "<video class='chat-video' controls src='"+m.data+"'></video>";
+
+    }else{
+
+      content = escapeHtml(m.text);
     }
 
-    div.innerHTML = content;
-    wrap.appendChild(div);
-    box.appendChild(wrap);
+    box.innerHTML += \`
+      <div class="msg-wrap \${mine ? "mine" : "other"}">
+        <div class="msg \${mine ? "mine" : "other"}">
+
+          <div class="name">
+            \${escapeHtml(m.name)}
+          </div>
+
+          \${content}
+
+        </div>
+      </div>
+    \`;
   });
 
   box.scrollTop = box.scrollHeight;
 }
 
-async function sendText() {
-  const text = document.getElementById("text").value;
-  if (!text.trim()) return;
+async function sendText(){
 
-  await fetch("/send", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
+  const text = document.getElementById("text").value;
+
+  if(!text.trim()) return;
+
+  await fetch("/send",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
       userId,
       roomCode,
-      name: userName,
-      type: "text",
+      name:userName,
+      type:"text",
       text
     })
   });
 
   document.getElementById("text").value = "";
+
   loadMessages();
 }
 
-function sendFile() {
+function sendFile(){
+
   const file = document.getElementById("fileInput").files[0];
-  if (!file) return;
 
-  if (file.size > ${MAX_UPLOAD_SIZE}) {
-    alert("파일은 5MB 이하만 가능해.");
-    return;
-  }
+  if(!file) return;
 
-  if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-    alert("사진이나 영상만 가능해.");
-    return;
+  if(file.size > ${MAX_UPLOAD_SIZE}){
+    return alert("5MB 이하만 가능");
   }
 
   const reader = new FileReader();
 
-  reader.onload = async function() {
-    await fetch("/send", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
+  reader.onload = async ()=>{
+
+    await fetch("/send",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({
         userId,
         roomCode,
-        name: userName,
-        type: file.type.startsWith("image/") ? "image" : "video",
-        data: reader.result,
-        fileName: file.name
+        name:userName,
+        type:file.type.startsWith("image/")
+          ? "image"
+          : "video",
+        data:reader.result
       })
     });
 
-    document.getElementById("fileInput").value = "";
     loadMessages();
   };
 
   reader.readAsDataURL(file);
 }
 
-function escapeHtml(text) {
+function escapeHtml(text){
+
   return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
 }
 
-document.addEventListener("keydown", e => {
-  if (e.key === "Enter" && document.getElementById("text") === document.activeElement) {
+document.addEventListener("keydown",e=>{
+
+  if(
+    e.key === "Enter" &&
+    document.getElementById("text") === document.activeElement
+  ){
     sendText();
   }
 });
 
-if ("serviceWorker" in navigator) {
+if("serviceWorker" in navigator){
   navigator.serviceWorker.register("/service-worker.js");
 }
+
 </script>
+
 </body>
 </html>
 `;
 
 const manifest = JSON.stringify({
-  name: "Z Chat",
-  short_name: "ZChat",
-  start_url: "/",
-  display: "standalone",
-  background_color: "#111111",
-  theme_color: "#111111",
-  orientation: "portrait",
-  icons: [
+  name:"Z Chat",
+  short_name:"ZChat",
+  start_url:"/",
+  display:"standalone",
+  background_color:"#111111",
+  theme_color:"#111111",
+  orientation:"portrait",
+  icons:[
     {
-      src: "https://via.placeholder.com/192.png?text=Z",
-      sizes: "192x192",
-      type: "image/png"
+      src:"/icon.svg",
+      sizes:"192x192",
+      type:"image/svg+xml"
     },
     {
-      src: "https://via.placeholder.com/512.png?text=Z",
-      sizes: "512x512",
-      type: "image/png"
+      src:"/icon.svg",
+      sizes:"512x512",
+      type:"image/svg+xml"
     }
   ]
 });
 
 const serviceWorker = `
-self.addEventListener("install", event => {
+self.addEventListener("install",e=>{
   self.skipWaiting();
 });
 
-self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
+self.addEventListener("activate",e=>{
+  self.clients.claim();
 });
 
-self.addEventListener("fetch", event => {});
+self.addEventListener("fetch",e=>{});
 `;
 
-function getRoom(code) {
-  if (!rooms[code]) {
+function getRoom(code){
+
+  if(!rooms[code]){
+
     rooms[code] = {
-      messages: [],
-      users: new Map()
+      messages:[],
+      users:new Map()
     };
   }
+
   return rooms[code];
 }
 
-function sendHtml(res, isAdmin) {
-  res.writeHead(200, {"Content-Type":"text/html; charset=utf-8"});
-  res.end(html.replace("__IS_ADMIN__", isAdmin ? "true" : "false"));
-}
+function readBody(req,callback){
 
-function readBody(req, callback) {
   let body = "";
-  req.on("data", chunk => {
+
+  req.on("data",chunk=>{
+
     body += chunk;
-    if (body.length > 8 * 1024 * 1024) {
-      req.destroy();
-    }
   });
-  req.on("end", () => callback(body));
+
+  req.on("end",()=>{
+
+    callback(body);
+  });
 }
 
-const server = http.createServer((req, res) => {
-  if (req.url === "/") {
-    sendHtml(res, false);
+function sendHtml(res,isAdmin){
+
+  res.writeHead(200,{
+    "Content-Type":"text/html; charset=utf-8"
+  });
+
+  res.end(
+    html.replace("__IS_ADMIN__", isAdmin ? "true" : "false")
+  );
+}
+
+const server = http.createServer((req,res)=>{
+
+  if(req.url === "/"){
+
+    sendHtml(res,false);
   }
 
-  else if (req.url === "/admin") {
-    sendHtml(res, true);
+  else if(req.url === "/admin"){
+
+    sendHtml(res,true);
   }
 
-  else if (req.url === "/manifest.json") {
-    res.writeHead(200, {"Content-Type":"application/json"});
+  else if(req.url === "/manifest.json"){
+
+    res.writeHead(200,{
+      "Content-Type":"application/json"
+    });
+
     res.end(manifest);
   }
 
-  else if (req.url === "/service-worker.js") {
-    res.writeHead(200, {"Content-Type":"application/javascript"});
+  else if(req.url === "/service-worker.js"){
+
+    res.writeHead(200,{
+      "Content-Type":"application/javascript"
+    });
+
     res.end(serviceWorker);
   }
 
-  else if (req.url === "/create-room" && req.method === "POST") {
-    readBody(req, body => {
-      const data = JSON.parse(body);
-      const code = String(data.roomCode || "").trim();
+  else if(req.url === "/icon.svg"){
 
-      if (!code) {
-        res.writeHead(200, {"Content-Type":"application/json"});
-        res.end(JSON.stringify({ ok:false, message:"방 코드가 비어있음" }));
-        return;
-      }
-
-      getRoom(code);
-      res.writeHead(200, {"Content-Type":"application/json"});
-      res.end(JSON.stringify({ ok:true }));
+    res.writeHead(200,{
+      "Content-Type":"image/svg+xml"
     });
+
+    res.end(\`
+<svg xmlns="http://www.w3.org/2000/svg"
+width="512"
+height="512"
+viewBox="0 0 512 512">
+
+<rect
+width="512"
+height="512"
+rx="110"
+fill="#111111"/>
+
+<text
+x="50%"
+y="45%"
+text-anchor="middle"
+font-size="170"
+font-weight="900"
+fill="#ffffff"
+font-family="Arial">
+Z
+</text>
+
+<text
+x="50%"
+y="66%"
+text-anchor="middle"
+font-size="56"
+font-weight="700"
+fill="#f7e600"
+font-family="Arial">
+CHAT
+</text>
+
+<text
+x="50%"
+y="83%"
+text-anchor="middle"
+font-size="70">
+⚡
+</text>
+
+</svg>
+    `);
   }
 
-  else if (req.url.startsWith("/check-room")) {
-    const url = new URL(req.url, "http://localhost");
-    const roomCode = url.searchParams.get("room");
+  else if(req.url === "/create-room" && req.method === "POST"){
 
-    res.writeHead(200, {"Content-Type":"application/json"});
-    res.end(JSON.stringify({ exists: !!rooms[roomCode] }));
-  }
+    readBody(req,body=>{
 
-  else if (req.url === "/enter" && req.method === "POST") {
-    readBody(req, body => {
       const data = JSON.parse(body);
-      const room = getRoom(data.roomCode);
-      const now = Date.now();
 
-      for (const [id, info] of room.users) {
-        if (now - info.time > 10000) room.users.delete(id);
-      }
+      getRoom(data.roomCode);
 
-      if (!room.users.has(data.userId) && room.users.size >= MAX_USERS_PER_ROOM) {
-        res.writeHead(200, {"Content-Type":"application/json"});
-        res.end(JSON.stringify({ ok:false, count:room.users.size }));
-        return;
-      }
-
-      room.users.set(data.userId, {
-        name: data.userName || "익명",
-        time: now
+      res.writeHead(200,{
+        "Content-Type":"application/json"
       });
 
-      res.writeHead(200, {"Content-Type":"application/json"});
-      res.end(JSON.stringify({ ok:true, count:room.users.size }));
+      res.end(JSON.stringify({
+        ok:true
+      }));
     });
   }
 
-  else if (req.url === "/leave" && req.method === "POST") {
-    readBody(req, body => {
+  else if(req.url.startsWith("/check-room")){
+
+    const url = new URL(req.url,"http://localhost");
+
+    const roomCode = url.searchParams.get("room");
+
+    res.writeHead(200,{
+      "Content-Type":"application/json"
+    });
+
+    res.end(JSON.stringify({
+      exists:!!rooms[roomCode]
+    }));
+  }
+
+  else if(req.url === "/enter" && req.method === "POST"){
+
+    readBody(req,body=>{
+
       const data = JSON.parse(body);
+
       const room = getRoom(data.roomCode);
+
+      const now = Date.now();
+
+      for(const [id,info] of room.users){
+
+        if(now - info.time > 10000){
+          room.users.delete(id);
+        }
+      }
+
+      if(
+        !room.users.has(data.userId) &&
+        room.users.size >= MAX_USERS_PER_ROOM
+      ){
+
+        return res.end(JSON.stringify({
+          ok:false,
+          count:room.users.size
+        }));
+      }
+
+      room.users.set(data.userId,{
+        name:data.userName,
+        time:now
+      });
+
+      res.writeHead(200,{
+        "Content-Type":"application/json"
+      });
+
+      res.end(JSON.stringify({
+        ok:true,
+        count:room.users.size
+      }));
+    });
+  }
+
+  else if(req.url === "/leave" && req.method === "POST"){
+
+    readBody(req,body=>{
+
+      const data = JSON.parse(body);
+
+      const room = getRoom(data.roomCode);
+
       room.users.delete(data.userId);
 
-      res.writeHead(200);
       res.end("OK");
     });
   }
 
-  else if (req.url.startsWith("/messages")) {
-    const url = new URL(req.url, "http://localhost");
+  else if(req.url.startsWith("/messages")){
+
+    const url = new URL(req.url,"http://localhost");
+
     const roomCode = url.searchParams.get("room");
+
     const room = getRoom(roomCode);
 
-    res.writeHead(200, {"Content-Type":"application/json; charset=utf-8"});
+    res.writeHead(200,{
+      "Content-Type":"application/json"
+    });
+
     res.end(JSON.stringify(room.messages));
   }
 
-  else if (req.url === "/send" && req.method === "POST") {
-    readBody(req, body => {
+  else if(req.url === "/send" && req.method === "POST"){
+
+    readBody(req,body=>{
+
       const data = JSON.parse(body);
+
       const room = getRoom(data.roomCode);
 
-      if (!room.users.has(data.userId)) {
-        res.writeHead(403);
-        res.end("Not entered");
-        return;
-      }
-
       room.messages.push({
-        userId: data.userId,
-        name: data.name || "익명",
-        type: data.type || "text",
-        text: data.text || "",
-        data: data.data || "",
-        fileName: data.fileName || "",
-        time: Date.now()
+        userId:data.userId,
+        name:data.name,
+        type:data.type,
+        text:data.text || "",
+        data:data.data || "",
+        time:Date.now()
       });
 
-      if (room.messages.length > 100) room.messages.shift();
+      if(room.messages.length > 100){
+        room.messages.shift();
+      }
 
-      res.writeHead(200);
       res.end("OK");
     });
   }
 
-  else {
+  else{
+
     res.writeHead(404);
+
     res.end("Not Found");
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT,"0.0.0.0",()=>{
+
   console.log("Z Chat 서버 실행됨!");
-  console.log("PORT:", PORT);
 });
