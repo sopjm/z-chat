@@ -4,5 +4,8 @@
   "main": "chat_server.js",
   "scripts": {
     "start": "node chat_server.js"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
   }
 }
