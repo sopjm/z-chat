@@ -48,19 +48,14 @@ const manifestAdmin = JSON.stringify({
     { src: "/admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
   ]
 });
-
 const serviceWorker =
-  'self.addEventListener("install", function(event){ self.skipWaiting(); });
-' +
-  'self.addEventListener("activate", function(event){ event.waitUntil(self.clients.claim()); });
-' +
-  'self.addEventListener("fetch", function(event){ event.respondWith(fetch(event.request)); });
-' +
-  'self.addEventListener("push", function(event){ var data = {}; try { data = event.data.json(); } catch(e) {} event.waitUntil(self.registration.showNotification(data.title || "Z Chat", { body: data.body || "새 메시지가 도착했습니다.", icon: data.icon || "/icon.svg", badge: data.icon || "/icon.svg", vibrate: [200,100,200], data: { url: data.url || "/" } })); });
-' +
-  'self.addEventListener("message", function(event){ var data = event.data || {}; if(data.type === "SHOW_NOTIFICATION"){ self.registration.showNotification(data.title || "Z Chat", { body: data.body || "새 메시지가 도착했습니다.", icon: data.icon || "/icon.svg", badge: data.icon || "/icon.svg", vibrate: [200,100,200], data: { url: data.url || "/" } }); } });
-' +
-  'self.addEventListener("notificationclick", function(event){ event.notification.close(); var url = event.notification.data && event.notification.data.url ? event.notification.data.url : "/"; event.waitUntil(clients.openWindow(url)); });';
+  "self.addEventListener('install', function(event){ self.skipWaiting(); });\n" +
+  "self.addEventListener('activate', function(event){ event.waitUntil(self.clients.claim()); });\n" +
+  "self.addEventListener('fetch', function(event){ event.respondWith(fetch(event.request)); });\n" +
+  "self.addEventListener('push', function(event){ var data = {}; try { data = event.data.json(); } catch(e) {} event.waitUntil(self.registration.showNotification(data.title || 'Z Chat', { body: data.body || '새 메시지가 도착했습니다.', icon: data.icon || '/icon.svg', badge: data.icon || '/icon.svg', vibrate: [200,100,200], data: { url: data.url || '/' } })); });\n" +
+  "self.addEventListener('message', function(event){ var data = event.data || {}; if(data.type === 'SHOW_NOTIFICATION'){ self.registration.showNotification(data.title || 'Z Chat', { body: data.body || '새 메시지가 도착했습니다.', icon: data.icon || '/icon.svg', badge: data.icon || '/icon.svg', vibrate: [200,100,200], data: { url: data.url || '/' } }); } });\n" +
+  "self.addEventListener('notificationclick', function(event){ event.notification.close(); var url = event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; event.waitUntil(clients.openWindow(url)); });";
+
 
 const html = String.raw`
 <!DOCTYPE html>
