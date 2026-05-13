@@ -42,15 +42,15 @@ const manifestUser = JSON.stringify({
 const manifestAdmin = JSON.stringify({
   name: "Z Admin",
   short_name: "Z Admin",
-  start_url: "/admin",
+  start_url: "/z-admin",
   scope: "/",
   display: "standalone",
   background_color: "#111111",
   theme_color: "#111111",
   orientation: "portrait",
   icons: [
-    { src: "/admin-icon.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-    { src: "/admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+    { src: "/z-admin-icon.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+    { src: "/z-admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
   ]
 });
 
@@ -372,7 +372,7 @@ function renderRooms() {
 
 async function loadAdminStats() {
   if (IS_ADMIN !== "true") return;
-  const res = await fetch("/admin-stats");
+  const res = await fetch("/z-admin-stats");
   const data = await res.json();
   document.getElementById("totalUsersText").innerText = "전체 접속자: " + data.totalUsers + "명";
   const box = document.getElementById("roomStats");
@@ -526,9 +526,9 @@ function notifyNewMessage(message) {
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   if (notificationsEnabled && "Notification" in window && Notification.permission === "granted") {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: "SHOW_NOTIFICATION", title: message.name || "Z Chat", body, icon: IS_ADMIN === "true" ? "/admin-icon.svg" : "/icon.svg", url: location.href });
+      navigator.serviceWorker.controller.postMessage({ type: "SHOW_NOTIFICATION", title: message.name || "Z Chat", body, icon: IS_ADMIN === "true" ? "/z-admin-icon.svg" : "/icon.svg", url: location.href });
     } else {
-      new Notification(message.name || "Z Chat", { body, icon: IS_ADMIN === "true" ? "/admin-icon.svg" : "/icon.svg" });
+      new Notification(message.name || "Z Chat", { body, icon: IS_ADMIN === "true" ? "/z-admin-icon.svg" : "/icon.svg" });
     }
   }
 }
@@ -600,8 +600,8 @@ function sendHtml(res, isAdmin) {
   let page = html
     .replaceAll("__IS_ADMIN__", isAdmin ? "true" : "false")
     .replaceAll("__TITLE__", isAdmin ? "Z Admin" : "Z Chat")
-    .replaceAll("__MANIFEST__", isAdmin ? "/admin-manifest.json" : "/manifest.json")
-    .replaceAll("__ICON__", isAdmin ? "/admin-icon.svg" : "/icon.svg")
+    .replaceAll("__MANIFEST__", isAdmin ? "/z-admin-manifest.json" : "/manifest.json")
+    .replaceAll("__ICON__", isAdmin ? "/z-admin-icon.svg" : "/icon.svg")
     .replaceAll("__LOGO__", isAdmin ? "Z ADMIN" : "Z CHAT")
     .replaceAll("__HEADER__", isAdmin ? "👑 Z Admin" : "⚡ Z Chat");
 
@@ -611,12 +611,12 @@ function sendHtml(res, isAdmin) {
 
 const server = http.createServer((req, res) => {
   if (req.url === "/") sendHtml(res, false);
-  else if (req.url === "/admin") sendHtml(res, true);
+  else if (req.url === "/z-admin") sendHtml(res, true);
   else if (req.url === "/manifest.json") {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(manifestUser);
   }
-  else if (req.url === "/admin-manifest.json") {
+  else if (req.url === "/z-admin-manifest.json") {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(manifestAdmin);
   }
@@ -628,7 +628,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {"Content-Type": "image/svg+xml"});
     res.end(userIconSvg);
   }
-  else if (req.url === "/admin-icon.svg") {
+  else if (req.url === "/z-admin-icon.svg") {
     res.writeHead(200, {"Content-Type": "image/svg+xml"});
     res.end(adminIconSvg);
   }
@@ -652,7 +652,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(JSON.stringify({exists: !!rooms[roomCode]}));
   }
-  else if (req.url === "/admin-stats") {
+  else if (req.url === "/z-admin-stats") {
     let totalUsers = 0;
     let roomList = [];
     for (const code in rooms) {
@@ -723,4 +723,3 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("Z Chat 서버 실행됨!");
   console.log("PORT:", PORT);
 });
-
