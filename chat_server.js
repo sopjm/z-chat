@@ -121,7 +121,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #111; colo
   .card { padding: 16px; }
   #messages { padding: 10px 18px; }
   .msg { max-width: 60%; }
-} }
+}
 .header { min-height: 62px; background: #181818; display: flex; align-items: center; justify-content: center; position: relative; border-bottom: 1px solid #444; font-size: 22px; font-weight: 700; padding: 0 80px; }
 .leave-btn { position: absolute; left: 12px; background: #333; color: white; border: none; padding: 9px 12px; border-radius: 10px; }
 .settings-btn { position: absolute; right: 12px; background: #333; color: white; border: none; padding: 9px 12px; border-radius: 10px; }
@@ -300,16 +300,8 @@ function showJoinRoom() {
 }
 
 function showJoinRoomForGuest() {
-  const savedRooms = JSON.parse(localStorage.getItem("z_rooms") || "[]");
-
-  // 이미 들어간 방이 있고 이름도 저장돼 있으면, 다음부터는 코드/이름 입력 없이 바로 입장
-  if (savedRooms.length > 0 && userName) {
-    roomCode = savedRooms[0];
-    startChat();
-    return;
-  }
-
   hideAllPages();
+  currentPageBeforeSettings = "join";
   document.getElementById("joinPage").style.display = "block";
 }
 
