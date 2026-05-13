@@ -47,7 +47,7 @@ const manifestAdmin = JSON.stringify({
   display: "standalone",
   background_color: "#111111",
   theme_color: "#111111",
-  orientation: "portrait",
+  orientation: "any",
   icons: [
     { src: "/z-admin-icon.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
     { src: "/z-admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
@@ -112,6 +112,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #111; colo
 @keyframes flash { from { opacity: 0.35; transform: scale(0.9); } to { opacity: 1; transform: scale(1.15); } }
 .app { width: 100%; height: 100dvh; background: #2b2b2b; display: flex; flex-direction: column; }
 @media (min-width: 700px) { .app { max-width: 460px; margin: auto; } }
+@media (orientation: landscape) and (max-height: 600px) {
+  .app { max-width: 900px; }
+  .header { min-height: 52px; font-size: 18px; }
+  .page { padding: 12px; }
+  .card { padding: 16px; }
+  #messages { padding: 10px 18px; }
+  .msg { max-width: 60%; }
+} }
 .header { min-height: 62px; background: #181818; display: flex; align-items: center; justify-content: center; position: relative; border-bottom: 1px solid #444; font-size: 22px; font-weight: 700; padding: 0 80px; }
 .leave-btn { position: absolute; left: 12px; background: #333; color: white; border: none; padding: 9px 12px; border-radius: 10px; }
 .settings-btn { position: absolute; right: 12px; background: #333; color: white; border: none; padding: 9px 12px; border-radius: 10px; }
