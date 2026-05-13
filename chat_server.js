@@ -63,7 +63,9 @@ self.addEventListener("activate", event => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener("fetch", event => {});
+self.addEventListener("fetch", event => {
+  event.respondWith(fetch(event.request));
+});
 
 self.addEventListener("message", event => {
   const data = event.data || {};
@@ -71,7 +73,7 @@ self.addEventListener("message", event => {
     self.registration.showNotification(data.title || "Z Chat", {
       body: data.body || "새 메시지가 도착했습니다.",
       icon: data.icon || "/icon.svg",
-      badge: data.badge || "/icon.svg",
+      badge: data.icon || "/icon.svg",
       vibrate: [200, 100, 200],
       data: { url: data.url || "/" }
     });
@@ -298,8 +300,16 @@ function showJoinRoom() {
 }
 
 function showJoinRoomForGuest() {
+  const savedRooms = JSON.parse(localStorage.getItem("z_rooms") || "[]");
+
+  // 이미 들어간 방이 있고 이름도 저장돼 있으면, 다음부터는 코드/이름 입력 없이 바로 입장
+  if (savedRooms.length > 0 && userName) {
+    roomCode = savedRooms[0];
+    startChat();
+    return;
+  }
+
   hideAllPages();
-  currentPageBeforeSettings = "join";
   document.getElementById("joinPage").style.display = "block";
 }
 
