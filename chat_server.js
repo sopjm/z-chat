@@ -49,8 +49,8 @@ const manifestAdmin = JSON.stringify({
   theme_color: "#111111",
   orientation: "any",
   icons: [
-    { src: "/z-admin-icon.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-    { src: "/z-admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+    { src: "/admin-icon.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+    { src: "/admin-icon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
   ]
 });
 
@@ -69,6 +69,7 @@ self.addEventListener("fetch", event => {
 
 self.addEventListener("message", event => {
   const data = event.data || {};
+
   if (data.type === "SHOW_NOTIFICATION") {
     self.registration.showNotification(data.title || "Z Chat", {
       body: data.body || "새 메시지가 도착했습니다.",
@@ -105,6 +106,7 @@ const html = `
 <meta property="og:description" content="초대코드로 들어오는 채팅방">
 <meta property="og:image" content="__ICON__">
 <meta property="og:type" content="website">
+
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: white; font-family: Arial, sans-serif; }
@@ -132,7 +134,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #111; colo
 .card input { width: 100%; margin-top: 10px; padding: 15px; border: none; border-radius: 14px; background: #1f1f1f; color: white; font-size: 16px; outline: none; }
 .card button { width: 100%; margin-top: 12px; padding: 15px; border: none; border-radius: 14px; background: white; color: black; font-size: 16px; font-weight: bold; }
 .sub-btn { background: #555 !important; color: white !important; }
-.danger-btn { background: #8b1e1e !important; color: white !important; }
 .room-item { background: #1f1f1f; border: 1px solid #444; border-radius: 16px; padding: 15px; margin-top: 10px; }
 .room-item-title { font-size: 18px; font-weight: bold; }
 .room-item-sub { margin-top: 4px; font-size: 13px; opacity: 0.7; }
@@ -157,11 +158,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #111; colo
 .small-note { color: #bbb; font-size: 13px; line-height: 1.5; margin-top: 12px; text-align: left; }
 </style>
 </head>
+
 <body>
 <div id="loading">
   <div class="lightning">⚡</div>
   <div class="logo">__LOGO__</div>
 </div>
+
 <div class="app">
   <div class="header">
     <button id="leaveBtn" class="leave-btn" onclick="leaveRoom()" style="display:none;">나가기</button>
@@ -206,19 +209,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #111; colo
   <div id="settingsPage" class="page" style="display:none;">
     <div class="card">
       <h2>알림 설정</h2>
-      <div class="toggle-row">
-        <span>새 메시지 알림</span>
-        <button id="notiToggle" onclick="toggleNotifications()">확인중</button>
-      </div>
-      <div class="toggle-row">
-        <span>알림 소리</span>
-        <button id="soundToggle" onclick="toggleSound()">확인중</button>
-      </div>
+      <div class="toggle-row"><span>새 메시지 알림</span><button id="notiToggle" onclick="toggleNotifications()">확인중</button></div>
+      <div class="toggle-row"><span>알림 소리</span><button id="soundToggle" onclick="toggleSound()">확인중</button></div>
       <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
-      <div class="small-note">
-        알림은 브라우저/PWA가 실행 중이거나 백그라운드에 살아있을 때 잘 작동합니다.<br>
-        완전히 꺼진 상태에서 카톡처럼 오는 푸시는 별도 Web Push 서버 구성이 필요합니다.
-      </div>
+      <div class="small-note">지금 알림은 앱/브라우저가 백그라운드에 살아있을 때 작동합니다.<br>카톡처럼 완전히 꺼진 상태 푸시는 Web Push 서버 구성이 더 필요합니다.</div>
     </div>
   </div>
 
@@ -239,7 +233,6 @@ const IS_ADMIN = "__IS_ADMIN__";
 let userId = localStorage.getItem("z_userId");
 let userName = localStorage.getItem("z_userName") || "";
 let roomCode = "";
-let currentPageBeforeSettings = "join";
 let messageTimer = null;
 let enterTimer = null;
 let adminTimer = null;
@@ -279,7 +272,6 @@ function stopTimers() {
 function goMain() {
   stopTimers();
   hideAllPages();
-  currentPageBeforeSettings = "main";
   document.getElementById("mainPage").style.display = "block";
   document.getElementById("leaveBtn").style.display = "none";
   renderRooms();
@@ -289,34 +281,34 @@ function goMain() {
 
 function showCreateRoom() {
   hideAllPages();
-  currentPageBeforeSettings = "create";
   document.getElementById("createPage").style.display = "block";
 }
 
 function showJoinRoom() {
   hideAllPages();
-  currentPageBeforeSettings = "join";
   document.getElementById("joinPage").style.display = "block";
 }
 
 function showJoinRoomForGuest() {
+  const savedRooms = JSON.parse(localStorage.getItem("z_rooms") || "[]");
+  if (savedRooms.length > 0 && userName) {
+    roomCode = savedRooms[0];
+    startChat();
+    return;
+  }
   hideAllPages();
-  currentPageBeforeSettings = "join";
   document.getElementById("joinPage").style.display = "block";
 }
 
 function showSettings() {
   hideAllPages();
-  document.getElementById("leaveBtn").style.display = roomCode ? "block" : "none";
   document.getElementById("settingsPage").style.display = "block";
-  updateSettingsButtons();
 }
 
 function backFromSettings() {
   if (roomCode) {
     hideAllPages();
     document.getElementById("chatPage").style.display = "flex";
-    document.getElementById("leaveBtn").style.display = "block";
     return;
   }
   if (IS_ADMIN === "true") goMain();
@@ -332,15 +324,9 @@ function updateSettingsButtons() {
 
 async function toggleNotifications() {
   if (!notificationsEnabled) {
-    if (!("Notification" in window)) {
-      alert("이 브라우저는 알림을 지원하지 않아.");
-      return;
-    }
+    if (!("Notification" in window)) return alert("이 브라우저는 알림을 지원하지 않아.");
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      alert("알림 권한이 허용되지 않았어.");
-      return;
-    }
+    if (permission !== "granted") return alert("알림 권한이 허용되지 않았어.");
     notificationsEnabled = true;
   } else {
     notificationsEnabled = false;
@@ -382,7 +368,7 @@ function renderRooms() {
 
 async function loadAdminStats() {
   if (IS_ADMIN !== "true") return;
-  const res = await fetch("/z-admin-stats");
+  const res = await fetch("/admin-stats");
   const data = await res.json();
   document.getElementById("totalUsersText").innerText = "전체 접속자: " + data.totalUsers + "명";
   const box = document.getElementById("roomStats");
@@ -479,18 +465,15 @@ async function loadMessages() {
   const box = document.getElementById("messages");
   box.innerHTML = "";
   const newOtherMessages = [];
-
   data.forEach(m => {
     const mine = m.userId === userId;
     const msgId = String(m.time) + "_" + String(m.userId) + "_" + String(m.text || m.fileName || "");
     if (!firstMessageLoad && !lastMessageIds.has(msgId) && !mine) newOtherMessages.push(m);
     lastMessageIds.add(msgId);
-
     let content = "";
     if (m.type === "image") content = "<img class='chat-img' src='" + m.data + "'>";
     else if (m.type === "video") content = "<video class='chat-video' controls src='" + m.data + "'></video>";
     else content = escapeHtml(m.text);
-
     box.innerHTML += `
       <div class="msg-wrap ${mine ? "mine" : "other"}">
         <div class="msg ${mine ? "mine" : "other"}">
@@ -500,7 +483,6 @@ async function loadMessages() {
       </div>
     `;
   });
-
   if (newOtherMessages.length > 0) notifyNewMessage(newOtherMessages[newOtherMessages.length - 1]);
   firstMessageLoad = false;
   box.scrollTop = box.scrollHeight;
@@ -531,14 +513,14 @@ function sendFile() {
 function notifyNewMessage(message) {
   const body = message.type === "image" ? "사진을 보냈습니다." : message.type === "video" ? "영상을 보냈습니다." : (message.text || "새 메시지");
   document.title = "새 메시지! - Z Chat";
-  setTimeout(() => document.title = IS_ADMIN === "true" ? "Z Admin" : "Z Chat", 1500);
+  setTimeout(() => { document.title = IS_ADMIN === "true" ? "Z Admin" : "Z Chat"; }, 1500);
   if (soundEnabled) playBeep();
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   if (notificationsEnabled && "Notification" in window && Notification.permission === "granted") {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: "SHOW_NOTIFICATION", title: message.name || "Z Chat", body, icon: IS_ADMIN === "true" ? "/z-admin-icon.svg" : "/icon.svg", url: location.href });
+      navigator.serviceWorker.controller.postMessage({ type: "SHOW_NOTIFICATION", title: message.name || "Z Chat", body, icon: IS_ADMIN === "true" ? "/admin-icon.svg" : "/icon.svg", url: location.href });
     } else {
-      new Notification(message.name || "Z Chat", { body, icon: IS_ADMIN === "true" ? "/z-admin-icon.svg" : "/icon.svg" });
+      new Notification(message.name || "Z Chat", { body, icon: IS_ADMIN === "true" ? "/admin-icon.svg" : "/icon.svg" });
     }
   }
 }
@@ -579,7 +561,12 @@ document.addEventListener("keydown", e => {
   if (e.key === "Enter" && document.getElementById("text") === document.activeElement) sendText();
 });
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js");
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/service-worker.js").then(reg => {
+    reg.update();
+    setInterval(() => reg.update(), 60000);
+  });
+}
 </script>
 </body>
 </html>
@@ -607,14 +594,13 @@ function readBody(req, callback) {
 }
 
 function sendHtml(res, isAdmin) {
-  let page = html
+  const page = html
     .replaceAll("__IS_ADMIN__", isAdmin ? "true" : "false")
     .replaceAll("__TITLE__", isAdmin ? "Z Admin" : "Z Chat")
-    .replaceAll("__MANIFEST__", isAdmin ? "/z-admin-manifest.json" : "/manifest.json")
-    .replaceAll("__ICON__", isAdmin ? "/z-admin-icon.svg" : "/icon.svg")
+    .replaceAll("__MANIFEST__", isAdmin ? "/admin-manifest.json" : "/manifest.json")
+    .replaceAll("__ICON__", isAdmin ? "/admin-icon.svg" : "/icon.svg")
     .replaceAll("__LOGO__", isAdmin ? "Z ADMIN" : "Z CHAT")
     .replaceAll("__HEADER__", isAdmin ? "👑 Z Admin" : "⚡ Z Chat");
-
   res.writeHead(200, {"Content-Type": "text/html; charset=utf-8"});
   res.end(page);
 }
@@ -626,7 +612,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(manifestUser);
   }
-  else if (req.url === "/z-admin-manifest.json") {
+  else if (req.url === "/admin-manifest.json") {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(manifestAdmin);
   }
@@ -638,7 +624,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {"Content-Type": "image/svg+xml"});
     res.end(userIconSvg);
   }
-  else if (req.url === "/z-admin-icon.svg") {
+  else if (req.url === "/admin-icon.svg") {
     res.writeHead(200, {"Content-Type": "image/svg+xml"});
     res.end(adminIconSvg);
   }
@@ -662,9 +648,9 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end(JSON.stringify({exists: !!rooms[roomCode]}));
   }
-  else if (req.url === "/z-admin-stats") {
+  else if (req.url === "/admin-stats") {
     let totalUsers = 0;
-    let roomList = [];
+    const roomList = [];
     for (const code in rooms) {
       const room = rooms[code];
       cleanUsers(room);
@@ -733,3 +719,4 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("Z Chat 서버 실행됨!");
   console.log("PORT:", PORT);
 });
+
