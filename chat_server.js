@@ -10,7 +10,11 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:test@example.com";
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const RAW_SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_URL = RAW_SUPABASE_URL
+  .replace(/\/rest\/v1\/?$/, "")
+  .replace(/\/$/, "");
+
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 
 const supabase =
@@ -75,7 +79,7 @@ const serviceWorker = [
   "self.addEventListener('activate', function(event){ event.waitUntil(self.clients.claim()); });",
   "self.addEventListener('fetch', function(event){ event.respondWith(fetch(event.request)); });",
   "self.addEventListener('push', function(event){ var data={}; try{data=event.data.json();}catch(e){} event.waitUntil(self.registration.showNotification(data.title || 'Z Chat',{body:data.body || '새 메시지가 도착했습니다.', icon:data.icon || '/icon.svg', badge:data.icon || '/icon.svg', tag:data.tag || 'z-chat', renotify:true, vibrate:[200,100,200], data:{url:data.url || '/'}})); });",
-  "self.addEventListener('notificationclick', function(event){ event.notification.close(); var url=event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; event.waitUntil(clients.openWindow(url)); });"
+  "self.addEventListener('notificationclick', function(event){ event.notification.close(); try{ if(navigator.clearAppBadge) navigator.clearAppBadge(); }catch(e){} var url=event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; event.waitUntil(clients.openWindow(url)); });"
 ].join("\n");
 
 const html = String.raw`
@@ -106,17 +110,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 .settings-btn{position:absolute;right:12px;background:#333;color:white;border:none;padding:9px 12px;border-radius:10px}
 .page{flex:1;overflow-y:auto;padding:18px;display:none}
 .card{background:#3a3a3a;border-radius:22px;padding:22px;text-align:center;margin-bottom:16px}
-.card h2{margin-bottom:10px}.card p{opacity:.8;margin-bottom:16px}
+.card h2{margin-bottom:10px}
+.card p{opacity:.8;margin-bottom:16px}
 .card input{width:100%;margin-top:10px;padding:15px;border:none;border-radius:14px;background:#1f1f1f;color:white;font-size:16px;outline:none}
 .card button{width:100%;margin-top:12px;padding:15px;border:none;border-radius:14px;background:white;color:black;font-size:16px;font-weight:bold}
 .sub-btn{background:#555!important;color:white!important}
 .room-item,.member-item{background:#1f1f1f;border:1px solid #444;border-radius:16px;padding:15px;margin-top:10px}
-.room-item-title{font-size:18px;font-weight:bold}.room-item-sub{margin-top:4px;font-size:13px;opacity:.7}
-.member-item{text-align:left}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#7cff7c;margin-right:8px}.dot.off{background:#777}
+.room-item-title{font-size:18px;font-weight:bold}
+.room-item-sub{margin-top:4px;font-size:13px;opacity:.7}
+.member-item{text-align:left}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#7cff7c;margin-right:8px}
+.dot.off{background:#777}
 #chatPage{display:none;flex-direction:column;flex:1;min-height:0}
 .status{padding:9px;text-align:center;background:#333;font-size:13px}
 #messages{flex:1;overflow-y:auto;padding:12px}
-.msg-wrap{display:flex;margin:10px 0}.msg-wrap.mine{justify-content:flex-end}.msg-wrap.other{justify-content:flex-start}
+.msg-wrap{display:flex;margin:10px 0}
+.msg-wrap.mine{justify-content:flex-end}
+.msg-wrap.other{justify-content:flex-start}
 .msg{max-width:76%;padding:11px 13px;border-radius:18px;word-break:break-word}
 .msg.mine{background:#f7e600;color:black;border-bottom-right-radius:5px}
 .msg.other{background:#444;color:white;border-bottom-left-radius:5px}
@@ -136,6 +146,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 </head>
 <body>
 <div id="loading"><div class="lightning">⚡</div><div class="logo">__LOGO__</div></div>
+
 <div class="app">
 <div class="header">
 <button id="leaveBtn" class="leave-btn" type="button" onclick="leaveRoom()" style="display:none">나가기</button>
@@ -144,17 +155,37 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 </div>
 
 <div id="mainPage" class="page">
-<div class="card"><h2>관리자 화면</h2><p>방을 만들거나 들어가세요</p><button onclick="showCreateRoom()">방 만들기</button><button class="sub-btn" onclick="showJoinRoom()">방 들어가기</button></div>
-<div class="card"><h2>관리자 통계</h2><p id="totalUsersText">전체 접속자: 0명 / 총 가입자: 0명</p><div id="roomStats"></div></div>
+<div class="card">
+<h2>관리자 화면</h2>
+<p>방을 만들거나 들어가세요</p>
+<button onclick="showCreateRoom()">방 만들기</button>
+<button class="sub-btn" onclick="showJoinRoom()">방 들어가기</button>
+</div>
+<div class="card">
+<h2>관리자 통계</h2>
+<p id="totalUsersText">전체 접속자: 0명 / 총 가입자: 0명</p>
+<div id="roomStats"></div>
+</div>
 <div id="myRooms"></div>
 </div>
 
 <div id="createPage" class="page">
-<div class="card"><h2>방 만들기</h2><input id="createCode" placeholder="방 코드"><input id="createName" placeholder="내 이름"><button onclick="createRoom()">방 만들기</button><button class="sub-btn" onclick="goMain()">뒤로가기</button></div>
+<div class="card">
+<h2>방 만들기</h2>
+<input id="createCode" placeholder="방 코드">
+<input id="createName" placeholder="내 이름">
+<button onclick="createRoom()">방 만들기</button>
+<button class="sub-btn" onclick="goMain()">뒤로가기</button>
+</div>
 </div>
 
 <div id="joinPage" class="page">
-<div class="card"><h2>방 들어가기</h2><input id="joinCode" placeholder="방 코드"><input id="joinName" placeholder="내 이름"><button onclick="joinRoom()">입장하기</button></div>
+<div class="card">
+<h2>방 들어가기</h2>
+<input id="joinCode" placeholder="방 코드">
+<input id="joinName" placeholder="내 이름">
+<button onclick="joinRoom()">입장하기</button>
+</div>
 <div id="guestSavedRooms"></div>
 </div>
 
@@ -165,18 +196,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 <div class="toggle-row"><span>알림 소리</span><button id="soundToggle" onclick="toggleSound()">확인중</button></div>
 <button class="sub-btn" onclick="showMembers()">방 참여자 목록</button>
 <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
-<div class="small-note">참여자 목록은 방에 한 번이라도 들어온 사람을 보여줍니다.</div>
+<div class="small-note">관리자/친구용에서 같은 이름을 쓰면 같은 사람으로 처리됩니다.</div>
 </div>
 </div>
 
 <div id="membersPage" class="page">
-<div class="card"><h2>방 참여자</h2><p id="memberCount">0명</p><div id="memberList"></div><button class="sub-btn" onclick="showSettings()">설정으로 돌아가기</button></div>
+<div class="card">
+<h2>방 참여자</h2>
+<p id="memberCount">0명</p>
+<div id="memberList"></div>
+<button class="sub-btn" onclick="showSettings()">설정으로 돌아가기</button>
+</div>
 </div>
 
 <div id="chatPage">
 <div class="status" id="status">접속중...</div>
 <div id="messages"></div>
-<div class="input-area">
+<div class="input-area" id="inputArea">
 <button class="file-btn" type="button" onclick="document.getElementById('fileInput').click()">＋</button>
 <button class="emoji-btn" type="button" onclick="toggleEmojiPanel()">😊</button>
 <div id="emojiPanel" class="emoji-panel"></div>
@@ -192,7 +228,7 @@ const IS_ADMIN="__IS_ADMIN__";
 const MAX_UPLOAD_SIZE_CLIENT=__MAX_UPLOAD_SIZE__;
 const VAPID_PUBLIC_KEY="__VAPID_PUBLIC_KEY__";
 
-var userId=localStorage.getItem("z_userId");
+var userId=localStorage.getItem("z_userId")||"";
 var userName=localStorage.getItem("z_userName")||"";
 var roomCode="";
 var messageTimer=null;
@@ -210,20 +246,41 @@ window.onerror=function(message,source,lineno){
   alert("앱 오류: "+message+" / 줄: "+lineno);
 };
 
-if(!userId){
-  userId=Math.random().toString(36).substring(2);
+function makeUserId(name){
+  return "user_" + encodeURIComponent(String(name||"").trim().toLowerCase());
+}
+
+function setUserIdentity(name){
+  userName=String(name||"").trim();
+  userId=makeUserId(userName);
+  localStorage.setItem("z_userName",userName);
   localStorage.setItem("z_userId",userId);
 }
 
+function clearBadge(){
+  try{
+    if(navigator.clearAppBadge)navigator.clearAppBadge();
+    if(navigator.setAppBadge)navigator.setAppBadge(0);
+  }catch(e){}
+}
+
 setTimeout(function(){
+  clearBadge();
   var loading=document.getElementById("loading");
   if(loading)loading.style.display="none";
+
+  if(userName && userId.indexOf("user_")!==0){
+    setUserIdentity(userName);
+  }
+
   document.getElementById("joinName").value=userName;
   document.getElementById("createName").value=userName;
   setupEmojiPanel();
   updateSettingsButtons();
+
   if(IS_ADMIN==="true")goMain();
   else showJoinRoomForGuest();
+
   if(notificationsEnabled)subscribePush();
 },800);
 
@@ -242,6 +299,13 @@ function stopTimers(){
   if(adminTimer)clearInterval(adminTimer);
 }
 
+function showChatPage(){
+  hideAllPages();
+  document.getElementById("chatPage").style.display="flex";
+  document.getElementById("leaveBtn").style.display="block";
+  document.getElementById("inputArea").style.display="flex";
+}
+
 function goMain(){
   stopTimers();
   hideAllPages();
@@ -256,7 +320,7 @@ function showCreateRoom(){hideAllPages();document.getElementById("createPage").s
 function showJoinRoom(){hideAllPages();document.getElementById("joinPage").style.display="block";renderGuestSavedRooms();}
 function showJoinRoomForGuest(){hideAllPages();document.getElementById("joinPage").style.display="block";document.getElementById("leaveBtn").style.display="none";renderGuestSavedRooms();}
 function showSettings(){hideAllPages();document.getElementById("settingsPage").style.display="block";}
-function backFromSettings(){if(roomCode){hideAllPages();document.getElementById("chatPage").style.display="flex";return;}if(IS_ADMIN==="true")goMain();else showJoinRoomForGuest();}
+function backFromSettings(){if(roomCode){showChatPage();return;}if(IS_ADMIN==="true")goMain();else showJoinRoomForGuest();}
 
 async function showMembers(){
   if(!roomCode){alert("방에 들어간 뒤 확인할 수 있어");return;}
@@ -307,14 +371,18 @@ async function subscribePush(){
     if(!("serviceWorker" in navigator))return;
     if(!("PushManager" in window))return;
     if(Notification.permission!=="granted")return;
+    if(!userId)return;
+
     var reg=await navigator.serviceWorker.ready;
     var sub=await reg.pushManager.getSubscription();
+
     if(!sub){
       sub=await reg.pushManager.subscribe({
         userVisibleOnly:true,
         applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
     }
+
     await fetch("/subscribe",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -381,10 +449,14 @@ async function createRoom(){
   var name=document.getElementById("createName").value.trim();
   if(!code)return alert("방 코드를 입력해줘");
   if(!name)return alert("이름을 입력해줘");
-  userName=name;
-  localStorage.setItem("z_userName",name);
+
+  setUserIdentity(name);
   roomCode=code;
-  await fetch("/create-room",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({roomCode:roomCode})});
+
+  var res=await fetch("/create-room",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({roomCode:roomCode})});
+  var data=await res.json();
+  if(!data.ok)return alert("방 만들기 실패: "+(data.error||"서버 오류"));
+
   saveRoom(code);
   startChat();
 }
@@ -394,11 +466,12 @@ async function joinRoom(){
   var name=document.getElementById("joinName").value.trim();
   if(!code)return alert("방 코드를 입력해줘");
   if(!name)return alert("이름을 입력해줘");
+
   var res=await fetch("/check-room?room="+encodeURIComponent(code));
   var data=await res.json();
   if(!data.exists)return alert("없는 방 코드야. 방 만든 사람이 먼저 만들어야 해.");
-  userName=name;
-  localStorage.setItem("z_userName",name);
+
+  setUserIdentity(name);
   roomCode=code;
   saveRoom(code);
   startChat();
@@ -408,25 +481,27 @@ function openSavedRoom(code){
   if(!userName){
     var name=prompt("이름을 입력해줘");
     if(!name)return;
-    userName=name;
-    localStorage.setItem("z_userName",name);
+    setUserIdentity(name);
+  }else{
+    setUserIdentity(userName);
   }
+
   roomCode=code;
   saveRoom(code);
   startChat();
 }
 
 async function startChat(){
+  clearBadge();
   stopTimers();
   firstMessageLoad=true;
   lastMessageIds=new Set();
-  hideAllPages();
-  document.getElementById("chatPage").style.display="flex";
-  document.getElementById("leaveBtn").style.display="block";
-  history.pushState({chat:true},"",location.href);
+  showChatPage();
+
   await enter();
   await subscribePush();
   await loadMessages();
+
   enterTimer=setInterval(enter,5000);
   messageTimer=setInterval(loadMessages,2500);
 }
@@ -453,31 +528,45 @@ async function enter(){
 
 async function loadMessages(){
   if(!roomCode)return;
+  clearBadge();
+
   var box=document.getElementById("messages");
   var nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<80;
+
   var res=await fetch("/messages?room="+encodeURIComponent(roomCode)+"&userId="+encodeURIComponent(userId)+"&userName="+encodeURIComponent(userName)+"&admin="+encodeURIComponent(IS_ADMIN));
   var data=await res.json();
+
   box.innerHTML="";
   var newOtherMessages=[];
+
   data.forEach(function(m){
     var mine=m.userId===userId;
     var msgId=String(m.id||m.time)+"_"+String(m.userId)+"_"+String(m.text||m.fileName||"");
     if(!firstMessageLoad&&!lastMessageIds.has(msgId)&&!mine)newOtherMessages.push(m);
     lastMessageIds.add(msgId);
+
     var content="";
     if(m.type==="image")content="<img class='chat-img' src='"+m.data+"'>";
     else if(m.type==="video")content="<video class='chat-video' controls src='"+m.data+"'></video>";
     else content=escapeHtml(m.text);
+
     var readInfo="";
     if(m.userId===userId&&m.readCount>0){
-      if(IS_ADMIN==="true"&&m.readNames&&m.readNames.length>0)readInfo="<div class='read-info'>읽음 "+m.readCount+" · "+escapeHtml(m.readNames.join(", "))+"</div>";
-      else readInfo="<div class='read-info'>읽음 "+m.readCount+"</div>";
+      if(IS_ADMIN==="true"&&m.readNames&&m.readNames.length>0){
+        readInfo="<div class='read-info'>읽음 "+m.readCount+" · "+escapeHtml(m.readNames.join(", "))+"</div>";
+      }else{
+        readInfo="<div class='read-info'>읽음 "+m.readCount+"</div>";
+      }
     }
+
     box.innerHTML+="<div class='msg-wrap "+(mine?"mine":"other")+"'><div class='msg "+(mine?"mine":"other")+"'><div class='name'>"+escapeHtml(m.name)+"</div>"+content+readInfo+"</div></div>";
   });
+
   if(newOtherMessages.length>0)notifyNewMessage(newOtherMessages[newOtherMessages.length-1]);
   firstMessageLoad=false;
   if(nearBottom||data.length<2)box.scrollTop=box.scrollHeight;
+
+  document.getElementById("inputArea").style.display="flex";
 }
 
 async function sendText(){
@@ -493,7 +582,7 @@ async function sendText(){
 async function sendEmoji(emoji){
   var res=await fetch("/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:userId,roomCode:roomCode,name:userName,type:"text",text:emoji})});
   var data=await res.json();
-  if(!data.ok)return alert("이모티콘 전송 실패");
+  if(!data.ok)return alert("이모티콘 전송 실패: "+(data.error||"서버 오류"));
   document.getElementById("emojiPanel").style.display="none";
   loadMessages();
 }
@@ -521,6 +610,7 @@ function sendFile(){
   if(!file)return;
   if(file.size>MAX_UPLOAD_SIZE_CLIENT)return alert("5MB 이하만 가능");
   if(!file.type.startsWith("image/")&&!file.type.startsWith("video/"))return alert("사진이나 영상만 가능해");
+
   var reader=new FileReader();
   reader.onload=async function(){
     var res=await fetch("/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:userId,roomCode:roomCode,name:userName,type:file.type.startsWith("image/")?"image":"video",data:reader.result,fileName:file.name})});
@@ -546,14 +636,23 @@ function playBeep(){
     var ctx=new AudioContext();
     var osc=ctx.createOscillator();
     var gain=ctx.createGain();
-    osc.type="sine";osc.frequency.value=880;gain.gain.value=.08;
-    osc.connect(gain);gain.connect(ctx.destination);osc.start();
+    osc.type="sine";
+    osc.frequency.value=880;
+    gain.gain.value=.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
     setTimeout(function(){osc.stop();ctx.close();},150);
   }catch(e){}
 }
 
-function escapeHtml(text){return String(text||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
-function escapeAttr(text){return String(text||"").replaceAll(String.fromCharCode(92),String.fromCharCode(92)+String.fromCharCode(92)).replaceAll("'",String.fromCharCode(92)+"'").replaceAll('"',"&quot;")}
+function escapeHtml(text){
+  return String(text||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+function escapeAttr(text){
+  return String(text||"").replaceAll(String.fromCharCode(92),String.fromCharCode(92)+String.fromCharCode(92)).replaceAll("'",String.fromCharCode(92)+"'").replaceAll('"',"&quot;");
+}
 
 document.addEventListener("keydown",function(e){
   if(e.key==="Enter"&&document.getElementById("text")===document.activeElement)sendText();
@@ -826,12 +925,10 @@ const server = http.createServer(function(req, res) {
     readBody(req, async body => {
       const data = JSON.parse(body);
       const code = String(data.roomCode || "").trim();
-
       if (!code) return sendJson(res, { ok: false, error: "방 코드 없음" });
 
       getOnlineRoom(code);
       const result = await dbUpsertRoom(code);
-
       if (!result.ok) return sendJson(res, result);
 
       sendJson(res, { ok: true });
@@ -934,10 +1031,7 @@ const server = http.createServer(function(req, res) {
       await dbUpsertMember(data.roomCode, data.userId, data.name || "익명");
 
       const saved = await dbSaveMessage(data.roomCode, msg);
-
-      if (!saved.ok) {
-        return sendJson(res, saved);
-      }
+      if (!saved.ok) return sendJson(res, saved);
 
       const bodyText =
         msg.type === "image"
