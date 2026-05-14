@@ -25,6 +25,15 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 
 const onlineRooms = {};
 
+function makeServerUserId(name) {
+  return "user_" + encodeURIComponent(String(name || "").trim().toLowerCase());
+}
+
+function getStableUserId(name, fallbackId) {
+  if (String(name || "").trim()) return makeServerUserId(name);
+  return fallbackId || "";
+}
+
 const userIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">' +
   '<rect width="512" height="512" rx="110" fill="#111111"/>' +
@@ -516,7 +525,11 @@ async function startChat(){
 
 async function leaveRoom(){
   try{
-    await fetch("/leave",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:userId,roomCode:roomCode})});
+    await fetch("/leave",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({userId:userId,userName:userName,roomCode:roomCode})
+    });
   }catch(e){}
   roomCode="";
   stopTimers();
@@ -528,7 +541,14 @@ window.addEventListener("popstate",function(){if(roomCode)leaveRoom();});
 
 async function enter(){
   if(!roomCode)return;
-  var res=await fetch("/enter",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:userId,roomCode:roomCode,userName:userName})});
+  setUserIdentity(userName);
+
+  var res=await fetch("/enter",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({userId:userId,roomCode:roomCode,userName:userName})
+  });
+
   var data=await res.json();
   if(!data.ok){document.getElementById("status").innerText="방이 꽉 찼습니다.";return;}
   document.getElementById("status").innerText="방 코드: "+roomCode+" / 접속자: "+data.count+"/6";
@@ -613,13 +633,8 @@ function addLongPressMenu(element,msg){
     timer=setTimeout(function(){openMessageMenu(msg);},600);
   });
 
-  element.addEventListener("touchend",function(){
-    clearTimeout(timer);
-  });
-
-  element.addEventListener("touchmove",function(){
-    clearTimeout(timer);
-  });
+  element.addEventListener("touchend",function(){clearTimeout(timer);});
+  element.addEventListener("touchmove",function(){clearTimeout(timer);});
 
   element.addEventListener("contextmenu",function(e){
     e.preventDefault();
@@ -659,6 +674,7 @@ async function editSelectedMessage(){
     body:JSON.stringify({
       messageId:selectedMessage.id,
       userId:userId,
+      userName:userName,
       text:newText,
       isAdmin:IS_ADMIN==="true"
     })
@@ -680,6 +696,7 @@ async function deleteSelectedMessage(){
     body:JSON.stringify({
       messageId:selectedMessage.id,
       userId:userId,
+      userName:userName,
       isAdmin:IS_ADMIN==="true"
     })
   });
@@ -694,6 +711,7 @@ async function deleteSelectedMessage(){
 async function sendText(){
   var text=document.getElementById("text").value;
   if(!text.trim())return;
+  setUserIdentity(userName);
 
   var res=await fetch("/send",{
     method:"POST",
@@ -715,6 +733,8 @@ async function sendText(){
 }
 
 async function sendEmoji(emoji){
+  setUserIdentity(userName);
+
   var res=await fetch("/send",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -737,7 +757,6 @@ async function sendEmoji(emoji){
 function setupEmojiPanel(){
   var box=document.getElementById("emojiPanel");
   if(!box)return;
-
   box.innerHTML="";
 
   emojis.forEach(function(e){
@@ -760,6 +779,8 @@ function sendFile(){
 
   if(file.size>MAX_UPLOAD_SIZE_CLIENT)return alert("5MB 이하만 가능");
   if(!file.type.startsWith("image/")&&!file.type.startsWith("video/"))return alert("사진이나 영상만 가능해");
+
+  setUserIdentity(userName);
 
   var reader=new FileReader();
 
@@ -1131,7 +1152,8 @@ const server = http.createServer(function(req, res) {
   } else if (path === "/subscribe" && req.method === "POST") {
     readBody(req, async body => {
       const data = JSON.parse(body);
-      await dbSavePushUser(data.userId, data.roomCode, data.subscription);
+      const stableUserId = getStableUserId(data.userName, data.userId);
+      await dbSavePushUser(stableUserId, data.roomCode, data.subscription);
       sendJson(res, { ok: true });
     });
   } else if (path === "/create-room" && req.method === "POST") {
@@ -1192,29 +1214,31 @@ const server = http.createServer(function(req, res) {
   } else if (path === "/enter" && req.method === "POST") {
     readBody(req, async body => {
       const data = JSON.parse(body);
+      const stableUserId = getStableUserId(data.userName, data.userId);
       const room = getOnlineRoom(data.roomCode);
       cleanUsers(room);
 
-      if (!room.users.has(data.userId) && room.users.size >= MAX_USERS_PER_ROOM) {
+      if (!room.users.has(stableUserId) && room.users.size >= MAX_USERS_PER_ROOM) {
         return sendJson(res, { ok: false, count: room.users.size });
       }
 
-      room.users.set(data.userId, {
+      room.users.set(stableUserId, {
         name: data.userName || "익명",
         time: Date.now()
       });
 
       await dbUpsertRoom(data.roomCode);
-      await dbRegisterUser(data.userId, data.userName || "익명");
-      await dbUpsertMember(data.roomCode, data.userId, data.userName || "익명");
+      await dbRegisterUser(stableUserId, data.userName || "익명");
+      await dbUpsertMember(data.roomCode, stableUserId, data.userName || "익명");
 
-      sendJson(res, { ok: true, count: room.users.size });
+      sendJson(res, { ok: true, count: room.users.size, userId: stableUserId });
     });
   } else if (path === "/leave" && req.method === "POST") {
     readBody(req, body => {
       const data = JSON.parse(body);
+      const stableUserId = getStableUserId(data.userName, data.userId);
       const room = getOnlineRoom(data.roomCode);
-      room.users.delete(data.userId);
+      room.users.delete(stableUserId);
       res.writeHead(200);
       res.end("OK");
     });
@@ -1222,17 +1246,18 @@ const server = http.createServer(function(req, res) {
     (async function() {
       const url = new URL(req.url, "http://localhost");
       const code = url.searchParams.get("room");
-      const viewerId = url.searchParams.get("userId");
       const viewerName = url.searchParams.get("userName");
+      const viewerId = getStableUserId(viewerName, url.searchParams.get("userId"));
       const messages = await dbLoadMessages(code, viewerId, viewerName);
       sendJson(res, messages);
     })();
   } else if (path === "/send" && req.method === "POST") {
     readBody(req, async body => {
       const data = JSON.parse(body);
+      const stableUserId = getStableUserId(data.name, data.userId);
 
       const msg = {
-        userId: data.userId,
+        userId: stableUserId,
         name: data.name || "익명",
         type: data.type || "text",
         text: data.text || "",
@@ -1242,8 +1267,8 @@ const server = http.createServer(function(req, res) {
       };
 
       await dbUpsertRoom(data.roomCode);
-      await dbRegisterUser(data.userId, data.name || "익명");
-      await dbUpsertMember(data.roomCode, data.userId, data.name || "익명");
+      await dbRegisterUser(stableUserId, data.name || "익명");
+      await dbUpsertMember(data.roomCode, stableUserId, data.name || "익명");
 
       const saved = await dbSaveMessage(data.roomCode, msg);
       if (!saved.ok) return sendJson(res, saved);
@@ -1255,7 +1280,7 @@ const server = http.createServer(function(req, res) {
           ? "영상을 보냈습니다."
           : msg.text || "새 메시지";
 
-      sendPushToRoom(data.roomCode, data.userId, {
+      sendPushToRoom(data.roomCode, stableUserId, {
         title: msg.name || "Z Chat",
         body: bodyText,
         icon: "/icon.svg",
@@ -1263,11 +1288,12 @@ const server = http.createServer(function(req, res) {
         tag: "room-" + data.roomCode
       });
 
-      sendJson(res, { ok: true });
+      sendJson(res, { ok: true, userId: stableUserId });
     });
   } else if (path === "/edit-message" && req.method === "POST") {
     readBody(req, async body => {
       const data = JSON.parse(body);
+      const stableUserId = getStableUserId(data.userName, data.userId);
 
       let query = supabase
         .from("messages")
@@ -1275,7 +1301,7 @@ const server = http.createServer(function(req, res) {
         .eq("id", data.messageId)
         .eq("type", "text");
 
-      if (!data.isAdmin) query = query.eq("user_id", data.userId);
+      if (!data.isAdmin) query = query.eq("user_id", stableUserId);
 
       const { error } = await query;
       if (error) return sendJson(res, { ok: false, error: error.message });
@@ -1285,13 +1311,14 @@ const server = http.createServer(function(req, res) {
   } else if (path === "/delete-message" && req.method === "POST") {
     readBody(req, async body => {
       const data = JSON.parse(body);
+      const stableUserId = getStableUserId(data.userName, data.userId);
 
       let query = supabase
         .from("messages")
         .delete()
         .eq("id", data.messageId);
 
-      if (!data.isAdmin) query = query.eq("user_id", data.userId);
+      if (!data.isAdmin) query = query.eq("user_id", stableUserId);
 
       const { error } = await query;
       if (error) return sendJson(res, { ok: false, error: error.message });
