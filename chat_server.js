@@ -121,7 +121,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 .msg-wrap{display:flex;margin:10px 0}
 .msg-wrap.mine{justify-content:flex-end}
 .msg-wrap.other{justify-content:flex-start}
-.msg{max-width:76%;padding:11px 13px;border-radius:18px;word-break:break-word;cursor:pointer}
+.msg{max-width:76%;padding:11px 13px;border-radius:18px;word-break:break-word;user-select:none}
 .msg.mine{background:#f7e600;color:black;border-bottom-right-radius:5px}
 .msg.other{background:#444;color:white;border-bottom-left-radius:5px}
 .name{font-size:12px;margin-bottom:5px;opacity:.7;font-weight:bold}
@@ -133,6 +133,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 .file-btn,.emoji-btn{background:#555!important;color:white!important}
 .emoji-panel{position:absolute;left:54px;bottom:62px;background:#1f1f1f;border:1px solid #555;border-radius:16px;padding:10px;display:none;grid-template-columns:repeat(5,36px);gap:6px;z-index:20}
 .emoji-panel button{background:#333;color:white;width:36px;height:36px;padding:0;font-size:20px}
+.msg-menu-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:none;align-items:flex-end;justify-content:center}
+.msg-menu{width:100%;max-width:460px;background:#202020;border-radius:22px 22px 0 0;padding:14px}
+.msg-menu button{width:100%;padding:16px;margin:6px 0;border:none;border-radius:14px;background:#333;color:white;font-size:16px;font-weight:bold}
+.msg-menu .danger{background:#b3261e}
+.msg-menu .cancel{background:#555}
 .toggle-row{display:flex;justify-content:space-between;align-items:center;background:#1f1f1f;padding:14px;border-radius:14px;margin-top:10px;text-align:left}
 .toggle-row button{width:auto;margin:0;padding:10px 14px}
 .small-note{color:#bbb;font-size:13px;line-height:1.5;margin-top:12px;text-align:left}
@@ -190,7 +195,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 <div class="toggle-row"><span>알림 소리</span><button id="soundToggle" onclick="toggleSound()">확인중</button></div>
 <button class="sub-btn" onclick="showMembers()">방 참여자 목록</button>
 <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
-<div class="small-note">내 메시지를 누르면 수정/모두에게 삭제가 가능합니다.</div>
+<div class="small-note">내 메시지를 꾹 누르면 수정/모두에게 삭제가 가능합니다.</div>
 </div>
 </div>
 
@@ -217,6 +222,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 </div>
 </div>
 
+<div id="msgMenuBg" class="msg-menu-bg" onclick="closeMessageMenu()">
+  <div class="msg-menu" onclick="event.stopPropagation()">
+    <button id="editMsgBtn" onclick="editSelectedMessage()">수정</button>
+    <button class="danger" onclick="deleteSelectedMessage()">모두에게 삭제</button>
+    <button class="cancel" onclick="closeMessageMenu()">취소</button>
+  </div>
+</div>
+
 <script>
 const IS_ADMIN="__IS_ADMIN__";
 const MAX_UPLOAD_SIZE_CLIENT=__MAX_UPLOAD_SIZE__;
@@ -233,6 +246,7 @@ var firstMessageLoad=true;
 var notificationsEnabled=localStorage.getItem("z_notifications")==="true";
 var soundEnabled=localStorage.getItem("z_sound")!=="false";
 var emojis=["😀","😂","😭","❤️","👍","🥺","🎉","😎","🔥","🙏","😡","😱","🤔","💕","ㅋㅋ"];
+var selectedMessage=null;
 
 window.onerror=function(message,source,lineno){
   var loading=document.getElementById("loading");
@@ -262,17 +276,13 @@ setTimeout(function(){
   clearBadge();
   var loading=document.getElementById("loading");
   if(loading)loading.style.display="none";
-
   if(userName)setUserIdentity(userName);
-
   document.getElementById("joinName").value=userName;
   document.getElementById("createName").value=userName;
   setupEmojiPanel();
   updateSettingsButtons();
-
   if(IS_ADMIN==="true")goMain();
   else showJoinRoomForGuest();
-
   if(notificationsEnabled)subscribePush();
 },800);
 
@@ -364,17 +374,14 @@ async function subscribePush(){
     if(!("PushManager" in window))return;
     if(Notification.permission!=="granted")return;
     if(!userId)return;
-
     var reg=await navigator.serviceWorker.ready;
     var sub=await reg.pushManager.getSubscription();
-
     if(!sub){
       sub=await reg.pushManager.subscribe({
         userVisibleOnly:true,
         applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
     }
-
     await fetch("/subscribe",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -441,14 +448,11 @@ async function createRoom(){
   var name=document.getElementById("createName").value.trim();
   if(!code)return alert("방 코드를 입력해줘");
   if(!name)return alert("이름을 입력해줘");
-
   setUserIdentity(name);
   roomCode=code;
-
   var res=await fetch("/create-room",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({roomCode:roomCode})});
   var data=await res.json();
   if(!data.ok)return alert("방 만들기 실패: "+(data.error||"서버 오류"));
-
   saveRoom(code);
   startChat();
 }
@@ -458,11 +462,9 @@ async function joinRoom(){
   var name=document.getElementById("joinName").value.trim();
   if(!code)return alert("방 코드를 입력해줘");
   if(!name)return alert("이름을 입력해줘");
-
   var res=await fetch("/check-room?room="+encodeURIComponent(code));
   var data=await res.json();
   if(!data.exists)return alert("없는 방 코드야. 방 만든 사람이 먼저 만들어야 해.");
-
   setUserIdentity(name);
   roomCode=code;
   saveRoom(code);
@@ -477,7 +479,6 @@ function openSavedRoom(code){
   }else{
     setUserIdentity(userName);
   }
-
   roomCode=code;
   saveRoom(code);
   startChat();
@@ -489,11 +490,9 @@ async function startChat(){
   firstMessageLoad=true;
   lastMessageIds=new Set();
   showChatPage();
-
   await enter();
   await subscribePush();
   await loadMessages();
-
   enterTimer=setInterval(enter,5000);
   messageTimer=setInterval(loadMessages,2500);
 }
@@ -521,13 +520,10 @@ async function enter(){
 async function loadMessages(){
   if(!roomCode)return;
   clearBadge();
-
   var box=document.getElementById("messages");
   var nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<80;
-
   var res=await fetch("/messages?room="+encodeURIComponent(roomCode)+"&userId="+encodeURIComponent(userId)+"&userName="+encodeURIComponent(userName)+"&admin="+encodeURIComponent(IS_ADMIN));
   var data=await res.json();
-
   box.innerHTML="";
   var newOtherMessages=[];
 
@@ -551,51 +547,113 @@ async function loadMessages(){
       }
     }
 
-    var canEdit=mine || IS_ADMIN==="true";
-    var clickAction=canEdit ? " onclick=\"messageMenu('"+m.id+"','"+escapeAttr(m.text||"")+"','"+m.type+"')\"" : "";
+    var wrap=document.createElement("div");
+    wrap.className="msg-wrap "+(mine?"mine":"other");
 
-    box.innerHTML+="<div class='msg-wrap "+(mine?"mine":"other")+"'><div class='msg "+(mine?"mine":"other")+"'" + clickAction + "><div class='name'>"+escapeHtml(m.name)+"</div>"+content+readInfo+"</div></div>";
+    var bubble=document.createElement("div");
+    bubble.className="msg "+(mine?"mine":"other");
+
+    var nameDiv=document.createElement("div");
+    nameDiv.className="name";
+    nameDiv.textContent=m.name||"익명";
+    bubble.appendChild(nameDiv);
+
+    if(m.type==="image"){
+      var img=document.createElement("img");
+      img.className="chat-img";
+      img.src=m.data;
+      bubble.appendChild(img);
+    }else if(m.type==="video"){
+      var video=document.createElement("video");
+      video.className="chat-video";
+      video.controls=true;
+      video.src=m.data;
+      bubble.appendChild(video);
+    }else{
+      var textSpan=document.createElement("span");
+      textSpan.textContent=m.text||"";
+      bubble.appendChild(textSpan);
+    }
+
+    if(readInfo){
+      var readDiv=document.createElement("div");
+      readDiv.className="read-info";
+      if(IS_ADMIN==="true"&&m.readNames&&m.readNames.length>0)readDiv.textContent="읽음 "+m.readCount+" · "+m.readNames.join(", ");
+      else readDiv.textContent="읽음 "+m.readCount;
+      bubble.appendChild(readDiv);
+    }
+
+    if(mine || IS_ADMIN==="true"){
+      addLongPressMenu(bubble,m);
+    }
+
+    wrap.appendChild(bubble);
+    box.appendChild(wrap);
   });
 
   if(newOtherMessages.length>0)notifyNewMessage(newOtherMessages[newOtherMessages.length-1]);
   firstMessageLoad=false;
   if(nearBottom||data.length<2)box.scrollTop=box.scrollHeight;
-
   document.getElementById("inputArea").style.display="flex";
 }
 
-async function messageMenu(messageId, oldText, type){
-  var menu=prompt("1 입력: 수정 / 2 입력: 모두에게 삭제");
-  if(menu==="1"){
-    if(type!=="text"){
-      alert("사진/영상은 수정할 수 없고 삭제만 가능해.");
-      return;
-    }
-    var newText=prompt("수정할 내용을 입력해줘", oldText);
-    if(!newText || !newText.trim())return;
+function addLongPressMenu(element,msg){
+  var timer=null;
+  element.addEventListener("touchstart",function(e){
+    timer=setTimeout(function(){openMessageMenu(msg);},600);
+  });
+  element.addEventListener("touchend",function(){clearTimeout(timer);});
+  element.addEventListener("touchmove",function(){clearTimeout(timer);});
+  element.addEventListener("contextmenu",function(e){
+    e.preventDefault();
+    openMessageMenu(msg);
+  });
+  element.addEventListener("dblclick",function(){
+    openMessageMenu(msg);
+  });
+}
 
-    var res=await fetch("/edit-message",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({messageId:messageId,userId:userId,text:newText,isAdmin:IS_ADMIN==="true"})
-    });
+function openMessageMenu(msg){
+  selectedMessage=msg;
+  document.getElementById("msgMenuBg").style.display="flex";
+  document.getElementById("editMsgBtn").style.display=msg.type==="text"?"block":"none";
+}
 
-    var data=await res.json();
-    if(!data.ok)return alert("수정 실패: "+(data.error||"서버 오류"));
-    loadMessages();
+function closeMessageMenu(){
+  selectedMessage=null;
+  document.getElementById("msgMenuBg").style.display="none";
+}
+
+async function editSelectedMessage(){
+  if(!selectedMessage)return;
+  if(selectedMessage.type!=="text"){
+    alert("사진/영상은 수정할 수 없고 삭제만 가능해.");
+    return;
   }
+  var newText=prompt("수정할 내용을 입력해줘",selectedMessage.text||"");
+  if(!newText||!newText.trim())return;
+  var res=await fetch("/edit-message",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({messageId:selectedMessage.id,userId:userId,text:newText,isAdmin:IS_ADMIN==="true"})
+  });
+  var data=await res.json();
+  if(!data.ok)return alert("수정 실패: "+(data.error||"서버 오류"));
+  closeMessageMenu();
+  loadMessages();
+}
 
-  if(menu==="2"){
-    var res2=await fetch("/delete-message",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({messageId:messageId,userId:userId,isAdmin:IS_ADMIN==="true"})
-    });
-
-    var data2=await res2.json();
-    if(!data2.ok)return alert("삭제 실패: "+(data2.error||"서버 오류"));
-    loadMessages();
-  }
+async function deleteSelectedMessage(){
+  if(!selectedMessage)return;
+  var res=await fetch("/delete-message",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({messageId:selectedMessage.id,userId:userId,isAdmin:IS_ADMIN==="true"})
+  });
+  var data=await res.json();
+  if(!data.ok)return alert("삭제 실패: "+(data.error||"서버 오류"));
+  closeMessageMenu();
+  loadMessages();
 }
 
 async function sendText(){
@@ -639,7 +697,6 @@ function sendFile(){
   if(!file)return;
   if(file.size>MAX_UPLOAD_SIZE_CLIENT)return alert("5MB 이하만 가능");
   if(!file.type.startsWith("image/")&&!file.type.startsWith("video/"))return alert("사진이나 영상만 가능해");
-
   var reader=new FileReader();
   reader.onload=async function(){
     var res=await fetch("/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:userId,roomCode:roomCode,name:userName,type:file.type.startsWith("image/")?"image":"video",data:reader.result,fileName:file.name})});
@@ -652,7 +709,6 @@ function sendFile(){
 }
 
 function notifyNewMessage(message){
-  var body=message.type==="image"?"사진을 보냈습니다.":message.type==="video"?"영상을 보냈습니다.":message.text||"새 메시지";
   document.title="새 메시지! - Z Chat";
   setTimeout(function(){document.title=IS_ADMIN==="true"?"Z Admin":"Z Chat";},1500);
   if(soundEnabled)playBeep();
@@ -785,11 +841,7 @@ async function dbGetMembers(roomCode) {
     .eq("room_code", roomCode)
     .order("joined_at", { ascending: true });
 
-  if (error) {
-    console.log("room_members 조회 오류:", error.message);
-    return [];
-  }
-
+  if (error) return [];
   return data || [];
 }
 
@@ -807,11 +859,7 @@ async function dbSaveMessage(roomCode, msg) {
     read_by: {}
   });
 
-  if (error) {
-    console.log("messages 저장 오류:", error.message);
-    return { ok: false, error: error.message };
-  }
-
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 
@@ -825,10 +873,7 @@ async function dbLoadMessages(roomCode, viewerId, viewerName) {
     .order("created_at", { ascending: true })
     .limit(100);
 
-  if (error) {
-    console.log("messages 조회 오류:", error.message);
-    return [];
-  }
+  if (error) return [];
 
   const rows = data || [];
   const updates = [];
@@ -842,7 +887,7 @@ async function dbLoadMessages(roomCode, viewerId, viewerName) {
     }
   }
 
-  if (updates.length > 0) Promise.all(updates).catch(e => console.log("읽음 저장 오류:", e.message));
+  if (updates.length > 0) Promise.all(updates).catch(() => {});
 
   return rows.map(m => {
     const readBy = m.read_by || {};
@@ -949,12 +994,10 @@ const server = http.createServer(function(req, res) {
     readBody(req, async body => {
       const data = JSON.parse(body);
       const code = String(data.roomCode || "").trim();
-
       if (!code) return sendJson(res, { ok: false, error: "방 코드 없음" });
 
       getOnlineRoom(code);
       const result = await dbUpsertRoom(code);
-
       if (!result.ok) return sendJson(res, result);
 
       sendJson(res, { ok: true });
@@ -1086,12 +1129,9 @@ const server = http.createServer(function(req, res) {
         .eq("id", data.messageId)
         .eq("type", "text");
 
-      if (!data.isAdmin) {
-        query = query.eq("user_id", data.userId);
-      }
+      if (!data.isAdmin) query = query.eq("user_id", data.userId);
 
       const { error } = await query;
-
       if (error) return sendJson(res, { ok: false, error: error.message });
 
       sendJson(res, { ok: true });
@@ -1105,12 +1145,9 @@ const server = http.createServer(function(req, res) {
         .delete()
         .eq("id", data.messageId);
 
-      if (!data.isAdmin) {
-        query = query.eq("user_id", data.userId);
-      }
+      if (!data.isAdmin) query = query.eq("user_id", data.userId);
 
       const { error } = await query;
-
       if (error) return sendJson(res, { ok: false, error: error.message });
 
       sendJson(res, { ok: true });
