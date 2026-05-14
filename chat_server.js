@@ -204,7 +204,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 <div class="toggle-row"><span>알림 소리</span><button id="soundToggle" onclick="toggleSound()">확인중</button></div>
 <button class="sub-btn" onclick="showMembers()">방 참여자 목록</button>
 <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
-<div class="small-note">친구용/관리자용에서 같은 이름이면 같은 사람으로 처리됩니다.</div>
+<div class="small-note">이모티콘은 입력창에 추가되고, 전송 버튼을 눌러야 전송됩니다.</div>
 </div>
 </div>
 
@@ -403,7 +403,12 @@ async function subscribePush(){
     await fetch("/subscribe",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({userId:userId,roomCode:roomCode,subscription:sub})
+      body:JSON.stringify({
+        userId:userId,
+        userName:userName,
+        roomCode:roomCode,
+        subscription:sub
+      })
     });
   }catch(e){console.log(e);}
 }
@@ -732,26 +737,11 @@ async function sendText(){
   loadMessages();
 }
 
-async function sendEmoji(emoji){
-  setUserIdentity(userName);
-
-  var res=await fetch("/send",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      userId:userId,
-      roomCode:roomCode,
-      name:userName,
-      type:"text",
-      text:emoji
-    })
-  });
-
-  var data=await res.json();
-  if(!data.ok)return alert("이모티콘 전송 실패: "+(data.error||"서버 오류"));
-
+function sendEmoji(emoji){
+  var input=document.getElementById("text");
+  input.value=input.value+emoji;
+  input.focus();
   document.getElementById("emojiPanel").style.display="none";
-  loadMessages();
 }
 
 function setupEmojiPanel(){
