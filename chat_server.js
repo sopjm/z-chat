@@ -11,10 +11,7 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:test@example.com";
 
 const RAW_SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_URL = RAW_SUPABASE_URL
-  .replace(/\/rest\/v1\/?$/, "")
-  .replace(/\/$/, "");
-
+const SUPABASE_URL = RAW_SUPABASE_URL.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 
 const supabase =
@@ -79,7 +76,7 @@ const serviceWorker = [
   "self.addEventListener('activate', function(event){ event.waitUntil(self.clients.claim()); });",
   "self.addEventListener('fetch', function(event){ event.respondWith(fetch(event.request)); });",
   "self.addEventListener('push', function(event){ var data={}; try{data=event.data.json();}catch(e){} event.waitUntil(self.registration.showNotification(data.title || 'Z Chat',{body:data.body || '새 메시지가 도착했습니다.', icon:data.icon || '/icon.svg', badge:data.icon || '/icon.svg', tag:data.tag || 'z-chat', renotify:true, vibrate:[200,100,200], data:{url:data.url || '/'}})); });",
-  "self.addEventListener('notificationclick', function(event){ event.notification.close(); try{ if(navigator.clearAppBadge) navigator.clearAppBadge(); }catch(e){} var url=event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; event.waitUntil(clients.openWindow(url)); });"
+  "self.addEventListener('notificationclick', function(event){ event.notification.close(); var url=event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; event.waitUntil(clients.openWindow(url)); });"
 ].join("\n");
 
 const html = String.raw`
@@ -93,9 +90,6 @@ const html = String.raw`
 <link rel="icon" href="__ICON__">
 <link rel="apple-touch-icon" href="__ICON__">
 <meta name="theme-color" content="#111111">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="__TITLE__">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;font-family:Arial,sans-serif}
@@ -127,7 +121,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 .msg-wrap{display:flex;margin:10px 0}
 .msg-wrap.mine{justify-content:flex-end}
 .msg-wrap.other{justify-content:flex-start}
-.msg{max-width:76%;padding:11px 13px;border-radius:18px;word-break:break-word}
+.msg{max-width:76%;padding:11px 13px;border-radius:18px;word-break:break-word;cursor:pointer}
 .msg.mine{background:#f7e600;color:black;border-bottom-right-radius:5px}
 .msg.other{background:#444;color:white;border-bottom-left-radius:5px}
 .name{font-size:12px;margin-bottom:5px;opacity:.7;font-weight:bold}
@@ -196,7 +190,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;color:white;fon
 <div class="toggle-row"><span>알림 소리</span><button id="soundToggle" onclick="toggleSound()">확인중</button></div>
 <button class="sub-btn" onclick="showMembers()">방 참여자 목록</button>
 <button class="sub-btn" onclick="backFromSettings()">돌아가기</button>
-<div class="small-note">관리자/친구용에서 같은 이름을 쓰면 같은 사람으로 처리됩니다.</div>
+<div class="small-note">내 메시지를 누르면 수정/모두에게 삭제가 가능합니다.</div>
 </div>
 </div>
 
@@ -269,9 +263,7 @@ setTimeout(function(){
   var loading=document.getElementById("loading");
   if(loading)loading.style.display="none";
 
-  if(userName && userId.indexOf("user_")!==0){
-    setUserIdentity(userName);
-  }
+  if(userName)setUserIdentity(userName);
 
   document.getElementById("joinName").value=userName;
   document.getElementById("createName").value=userName;
@@ -559,7 +551,10 @@ async function loadMessages(){
       }
     }
 
-    box.innerHTML+="<div class='msg-wrap "+(mine?"mine":"other")+"'><div class='msg "+(mine?"mine":"other")+"'><div class='name'>"+escapeHtml(m.name)+"</div>"+content+readInfo+"</div></div>";
+    var canEdit=mine || IS_ADMIN==="true";
+    var clickAction=canEdit ? " onclick=\"messageMenu('"+m.id+"','"+escapeAttr(m.text||"")+"','"+m.type+"')\"" : "";
+
+    box.innerHTML+="<div class='msg-wrap "+(mine?"mine":"other")+"'><div class='msg "+(mine?"mine":"other")+"'" + clickAction + "><div class='name'>"+escapeHtml(m.name)+"</div>"+content+readInfo+"</div></div>";
   });
 
   if(newOtherMessages.length>0)notifyNewMessage(newOtherMessages[newOtherMessages.length-1]);
@@ -567,6 +562,40 @@ async function loadMessages(){
   if(nearBottom||data.length<2)box.scrollTop=box.scrollHeight;
 
   document.getElementById("inputArea").style.display="flex";
+}
+
+async function messageMenu(messageId, oldText, type){
+  var menu=prompt("1 입력: 수정 / 2 입력: 모두에게 삭제");
+  if(menu==="1"){
+    if(type!=="text"){
+      alert("사진/영상은 수정할 수 없고 삭제만 가능해.");
+      return;
+    }
+    var newText=prompt("수정할 내용을 입력해줘", oldText);
+    if(!newText || !newText.trim())return;
+
+    var res=await fetch("/edit-message",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messageId:messageId,userId:userId,text:newText,isAdmin:IS_ADMIN==="true"})
+    });
+
+    var data=await res.json();
+    if(!data.ok)return alert("수정 실패: "+(data.error||"서버 오류"));
+    loadMessages();
+  }
+
+  if(menu==="2"){
+    var res2=await fetch("/delete-message",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messageId:messageId,userId:userId,isAdmin:IS_ADMIN==="true"})
+    });
+
+    var data2=await res2.json();
+    if(!data2.ok)return alert("삭제 실패: "+(data2.error||"서버 오류"));
+    loadMessages();
+  }
 }
 
 async function sendText(){
@@ -871,17 +900,12 @@ async function dbSavePushUser(userId, roomCode, subscription) {
 
 async function dbPushTargets(roomCode, senderId) {
   if (!supabase || !roomCode) return [];
-
   const { data } = await supabase.from("push_subscriptions").select("user_id,subscription,rooms");
-
-  return (data || []).filter(x => {
-    return x.user_id !== senderId && x.rooms && x.rooms[roomCode] && x.subscription;
-  });
+  return (data || []).filter(x => x.user_id !== senderId && x.rooms && x.rooms[roomCode] && x.subscription);
 }
 
 async function sendPushToRoom(roomCode, senderId, payload) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-
   const targets = await dbPushTargets(roomCode, senderId);
 
   for (const item of targets) {
@@ -925,10 +949,12 @@ const server = http.createServer(function(req, res) {
     readBody(req, async body => {
       const data = JSON.parse(body);
       const code = String(data.roomCode || "").trim();
+
       if (!code) return sendJson(res, { ok: false, error: "방 코드 없음" });
 
       getOnlineRoom(code);
       const result = await dbUpsertRoom(code);
+
       if (!result.ok) return sendJson(res, result);
 
       sendJson(res, { ok: true });
@@ -1047,6 +1073,45 @@ const server = http.createServer(function(req, res) {
         url: "/",
         tag: "room-" + data.roomCode
       });
+
+      sendJson(res, { ok: true });
+    });
+  } else if (path === "/edit-message" && req.method === "POST") {
+    readBody(req, async body => {
+      const data = JSON.parse(body);
+
+      let query = supabase
+        .from("messages")
+        .update({ text: data.text || "" })
+        .eq("id", data.messageId)
+        .eq("type", "text");
+
+      if (!data.isAdmin) {
+        query = query.eq("user_id", data.userId);
+      }
+
+      const { error } = await query;
+
+      if (error) return sendJson(res, { ok: false, error: error.message });
+
+      sendJson(res, { ok: true });
+    });
+  } else if (path === "/delete-message" && req.method === "POST") {
+    readBody(req, async body => {
+      const data = JSON.parse(body);
+
+      let query = supabase
+        .from("messages")
+        .delete()
+        .eq("id", data.messageId);
+
+      if (!data.isAdmin) {
+        query = query.eq("user_id", data.userId);
+      }
+
+      const { error } = await query;
+
+      if (error) return sendJson(res, { ok: false, error: error.message });
 
       sendJson(res, { ok: true });
     });
